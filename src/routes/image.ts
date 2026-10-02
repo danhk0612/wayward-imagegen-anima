@@ -114,6 +114,7 @@ function renderSignature(config: Config, body: GenerateBody): string {
     `characterLoras:${characterLoras}`,
     `trigger:${profile?.triggerPrompt ?? ''}`,
     `basePrompt:${profile?.basePrompt ?? ''}`,
+    `gamePromptPrefixToStrip:${profile?.gamePromptPrefixToStrip ?? ''}`,
     `ppp:${config.positivePromptPrefix}|${profile?.positivePromptPrefix ?? ''}`,
     `pps:${profile?.positivePromptSuffix ?? ''}|${config.positivePromptSuffix}`,
     `npp:${config.negativePromptPrefix}|${profile?.negativePromptPrefix ?? ''}`,
