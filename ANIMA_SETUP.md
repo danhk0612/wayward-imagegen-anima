@@ -50,8 +50,8 @@ VAELoader (Qwen Image VAE)
   -> VAE Decode
 ```
 
-The defaults are 30 steps, CFG 4, `er_sde`, `simple`, matching the current
-ComfyUI Anima template starting point. They remain configurable.
+The balanced defaults are 30 steps, CFG 4.5, `er_sde`, `simple`. They remain
+configurable from the browser setup UI or JSON.
 
 ## Character profiles
 
@@ -117,6 +117,13 @@ The negative prompt uses the character/global negative prefix/suffix around
 Wayward's negative prompt.
 
 ## Setup
+
+The easiest route is the local browser wizard at
+`http://127.0.0.1:8189/setup.html`. It discovers the model/LoRA lists directly
+from ComfyUI, manages character profiles, validates the selected files and can
+run a real test render before saving.
+
+For manual JSON setup:
 
 1. Confirm the exact Anima model + character LoRA works by itself in your image
    UI first.
