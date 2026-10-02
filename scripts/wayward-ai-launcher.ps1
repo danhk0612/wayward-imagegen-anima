@@ -31,11 +31,24 @@ if (-not (Test-Path (Join-Path $backendRoot "src\cli.ts"))) {
   throw "wayward-imagegen backend not found: $backendRoot"
 }
 
-if (-not (Test-Http "http://127.0.0.1:8188/system_stats" 3)) {
+$configPath = Join-Path $backendRoot "wayward-imagegen.config.json"
+$comfyUrl = "http://127.0.0.1:8188"
+if (Test-Path $configPath) {
+  try {
+    $launcherConfig = Get-Content $configPath -Raw | ConvertFrom-Json
+    if (-not [string]::IsNullOrWhiteSpace([string]$launcherConfig.comfyUrl)) {
+      $comfyUrl = ([string]$launcherConfig.comfyUrl).TrimEnd("/")
+    }
+  }
+  catch {
+    Write-Host "Configuration could not be parsed; the setup wizard will repair it." -ForegroundColor Yellow
+  }
+}
+
+if (-not (Test-Http ($comfyUrl + "/system_stats") 3)) {
   Write-Host ""
-  Write-Host "ComfyUI is not running at http://127.0.0.1:8188." -ForegroundColor Yellow
-  Write-Host "Start ComfyUI first, then run Wayward-AI.cmd again."
-  exit 2
+  Write-Host "ComfyUI is not answering at $comfyUrl." -ForegroundColor Yellow
+  Write-Host "The backend will still start so setup/review remains available."
 }
 
 $backendReady = Test-Http "http://127.0.0.1:8189/api/pack" 2
@@ -79,7 +92,6 @@ if (-not $backendReady) {
   }
 }
 
-$configPath = Join-Path $backendRoot "wayward-imagegen.config.json"
 $setupRequired = $true
 if (Test-Path $configPath) {
   try {
