@@ -51,6 +51,8 @@ export interface ComplexScenePolicy {
 }
 
 export interface Config {
+  /** Absolute path of the JSON file backing UI-editable settings. */
+  configFilePath: string
   host: string
   port: number
   imagesDir: string
@@ -282,7 +284,8 @@ function readConfigFile(file: string): Record<string, unknown> {
 
 export function resolveConfig(argv: string[] = [], cwd = process.cwd()): Config {
   const flags = parseArgs(argv)
-  const file = readConfigFile(path.resolve(cwd, flags['config'] ?? 'wayward-imagegen.config.json'))
+  const configFilePath = path.resolve(cwd, flags['config'] ?? 'wayward-imagegen.config.json')
+  const file = readConfigFile(configFilePath)
 
   const pick = (flag: string, env: string, fileKey: string, fallback: string): string => {
     if (flags[flag] != null) return flags[flag]
@@ -354,6 +357,7 @@ export function resolveConfig(argv: string[] = [], cwd = process.cwd()): Config 
   )
 
   return {
+    configFilePath,
     host: pick('host', 'WAYWARD_HOST', 'host', '127.0.0.1'),
     port: pickNum('port', 'WAYWARD_PORT', 'port', DEFAULT_PORT),
     imagesDir,
