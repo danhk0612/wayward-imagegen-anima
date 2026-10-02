@@ -394,7 +394,7 @@ export function resolveConfig(argv: string[] = [], cwd = process.cwd()): Config 
 
     checkpoint: pick('checkpoint', 'COMFYUI_CHECKPOINT', 'checkpoint', DEFAULT_CHECKPOINT),
     steps: pickNum('steps', 'COMFYUI_STEPS', 'steps', imagePreset === 'anima' ? 30 : 9),
-    cfg: pickNum('cfg', 'COMFYUI_CFG', 'cfg', imagePreset === 'anima' ? 4 : 1.5),
+    cfg: pickNum('cfg', 'COMFYUI_CFG', 'cfg', imagePreset === 'anima' ? 4.5 : 1.5),
     sampler: pick('sampler', 'COMFYUI_SAMPLER', 'sampler', imagePreset === 'anima' ? 'er_sde' : 'euler_ancestral'),
     scheduler: pick('scheduler', 'COMFYUI_SCHEDULER', 'scheduler', 'simple'),
     clipSkip: pickNum('clip-skip', 'COMFYUI_CLIP_SKIP', 'clipSkip', -2),
