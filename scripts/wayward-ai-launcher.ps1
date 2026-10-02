@@ -10,9 +10,11 @@ if ([string]::IsNullOrWhiteSpace($GameRoot)) {
 
 $backendRoot = Join-Path $GameRoot "wayward-imagegen"
 $gameEntry   = Join-Path $GameRoot "index.html"
+$configPath  = Join-Path $backendRoot "wayward-imagegen.config.json"
 $stateDir    = Join-Path $backendRoot "images\.state"
 $stdoutLog   = Join-Path $stateDir "launcher-backend.out.log"
 $stderrLog   = Join-Path $stateDir "launcher-backend.err.log"
+$backendBase = "http://127.0.0.1:8189"
 
 function Test-Http([string]$Url, [int]$TimeoutSec = 2) {
   try {
@@ -24,36 +26,40 @@ function Test-Http([string]$Url, [int]$TimeoutSec = 2) {
   }
 }
 
-if (-not (Test-Path $gameEntry)) {
-  throw "Wayward entry point not found: $gameEntry"
-}
-if (-not (Test-Path (Join-Path $backendRoot "src\cli.ts"))) {
-  throw "wayward-imagegen backend not found: $backendRoot"
-}
-
-$configPath = Join-Path $backendRoot "wayward-imagegen.config.json"
-$comfyUrl = "http://127.0.0.1:8188"
-if (Test-Path $configPath) {
+function Read-LauncherConfig {
+  if (-not (Test-Path $configPath)) { return $null }
   try {
-    $launcherConfig = Get-Content $configPath -Raw | ConvertFrom-Json
-    if (-not [string]::IsNullOrWhiteSpace([string]$launcherConfig.comfyUrl)) {
-      $comfyUrl = ([string]$launcherConfig.comfyUrl).TrimEnd("/")
-    }
+    return Get-Content $configPath -Raw | ConvertFrom-Json
   }
   catch {
-    Write-Host "Configuration could not be parsed; the setup wizard will repair it." -ForegroundColor Yellow
+    return $null
   }
 }
 
-if (-not (Test-Http ($comfyUrl + "/system_stats") 3)) {
-  Write-Host ""
-  Write-Host "ComfyUI is not answering at $comfyUrl." -ForegroundColor Yellow
-  Write-Host "The backend will still start so setup/review remains available."
+function Get-ComfyUrl {
+  $cfg = Read-LauncherConfig
+  if ($cfg -and -not [string]::IsNullOrWhiteSpace([string]$cfg.comfyUrl)) {
+    return ([string]$cfg.comfyUrl).TrimEnd("/")
+  }
+  return "http://127.0.0.1:8188"
 }
 
-$backendReady = Test-Http "http://127.0.0.1:8189/api/pack" 2
+function Test-SetupRequired {
+  $cfg = Read-LauncherConfig
+  if (-not $cfg) { return $true }
 
-if (-not $backendReady) {
+  $profileCount = 0
+  if ($cfg.characterProfiles) {
+    $profileCount = @($cfg.characterProfiles.PSObject.Properties).Count
+  }
+  return ($cfg.imagePreset -ne "anima") -or ($profileCount -lt 1)
+}
+
+function Start-Backend {
+  if (Test-Http ($backendBase + "/api/pack") 2) {
+    return
+  }
+
   $port = Get-NetTCPConnection -LocalPort 8189 -State Listen -ErrorAction SilentlyContinue
   if ($port) {
     throw "Port 8189 is in use, but the Wayward image backend did not answer /api/pack."
@@ -66,11 +72,8 @@ if (-not $backendReady) {
 
   New-Item -ItemType Directory -Path $stateDir -Force | Out-Null
 
-  # Get-Command bun can resolve to a PowerShell shim/script rather than bun.exe.
-  # Passing that shim directly to Start-Process raises
-  # "%1 is not a valid Win32 application" on some Bun installations.
-  # Launch it through PowerShell so the same command resolution that works in
-  # the user's terminal is used here as well.
+  # Get-Command bun may resolve to a PowerShell shim instead of bun.exe.
+  # Resolve it inside a child PowerShell so both installations work.
   $bunCommand = "& bun 'src\cli.ts' --verbose"
 
   Start-Process `
@@ -84,33 +87,76 @@ if (-not $backendReady) {
   $deadline = (Get-Date).AddSeconds(20)
   do {
     Start-Sleep -Milliseconds 400
-    $backendReady = Test-Http "http://127.0.0.1:8189/api/pack" 2
-  } while (-not $backendReady -and (Get-Date) -lt $deadline)
+    if (Test-Http ($backendBase + "/api/pack") 2) { return }
+  } while ((Get-Date) -lt $deadline)
 
-  if (-not $backendReady) {
-    throw "wayward-imagegen did not become ready. Check: $stderrLog"
-  }
+  throw "wayward-imagegen did not become ready. Check: $stderrLog"
 }
 
-$setupRequired = $true
-if (Test-Path $configPath) {
+function Stop-Backend {
+  if (-not (Test-Http ($backendBase + "/api/pack") 2)) { return }
+
   try {
-    $cfg = Get-Content $configPath -Raw | ConvertFrom-Json
-    $profileCount = 0
-    if ($cfg.characterProfiles) {
-      $profileCount = @($cfg.characterProfiles.PSObject.Properties).Count
-    }
-    $setupRequired = ($cfg.imagePreset -ne "anima") -or ($profileCount -lt 1)
+    Invoke-RestMethod `
+      -Uri ($backendBase + "/api/control/shutdown") `
+      -Method Post `
+      -TimeoutSec 5 | Out-Null
   }
   catch {
-    $setupRequired = $true
+    throw "The backend is running but could not be shut down safely. Open $backendBase/setup.html and use AI server shutdown."
+  }
+
+  $deadline = (Get-Date).AddSeconds(15)
+  do {
+    Start-Sleep -Milliseconds 300
+    if (-not (Test-Http ($backendBase + "/api/pack") 1)) { return }
+  } while ((Get-Date) -lt $deadline)
+
+  throw "The backend did not stop within 15 seconds."
+}
+
+if (-not (Test-Path $gameEntry)) {
+  throw "Wayward entry point not found: $gameEntry"
+}
+if (-not (Test-Path (Join-Path $backendRoot "src\cli.ts"))) {
+  throw "wayward-imagegen backend not found: $backendRoot"
+}
+
+$comfyUrl = Get-ComfyUrl
+if (-not (Test-Http ($comfyUrl + "/system_stats") 3)) {
+  Write-Host ""
+  Write-Host "ComfyUI is not answering at $comfyUrl." -ForegroundColor Yellow
+  Write-Host "The backend will still start so setup/review remains available."
+}
+
+Start-Backend
+
+if (Test-SetupRequired) {
+  Start-Process ($backendBase + "/setup.html")
+  Write-Host ""
+  Write-Host "Initial Anima setup is required." -ForegroundColor Cyan
+  Write-Host "The setup page is open. This launcher will wait for you to save a character profile."
+  Write-Host "After a valid setup is saved, the backend will restart once and Wayward will open automatically."
+
+  $deadline = (Get-Date).AddHours(2)
+  while ((Get-Date) -lt $deadline) {
+    Start-Sleep -Seconds 1
+    if (-not (Test-SetupRequired)) {
+      Write-Host "Setup saved. Restarting image backend..."
+      Stop-Backend
+      Start-Backend
+      break
+    }
+  }
+
+  if (Test-SetupRequired) {
+    throw "Setup was not completed within two hours. Run Wayward-Anima.cmd again when ready."
   }
 }
 
-if ($setupRequired) {
-  Start-Process "http://127.0.0.1:8189/setup.html"
-  Write-Host "Initial setup is required. The setup page has been opened."
-  exit 0
+$comfyUrl = Get-ComfyUrl
+if (-not (Test-Http ($comfyUrl + "/system_stats") 3)) {
+  Write-Host "ComfyUI is still unavailable at $comfyUrl. Cached art can be used, but new images cannot render." -ForegroundColor Yellow
 }
 
 Start-Process $gameEntry
