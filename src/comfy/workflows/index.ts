@@ -74,11 +74,14 @@ const OTHER_PERSON_MARKERS = [
   'looking at another', 'with a man', 'with another person',
 ]
 
-const COMPLEX_INTERACTION_MARKERS = [
+const INHERENT_MULTI_PERSON_INTERACTION_MARKERS = [
   'sex', 'vaginal', 'anal', 'cunnilingus', 'fellatio', 'blowjob',
-  'handjob', 'paizuri', 'titfuck', 'breast press', 'doggystyle',
-  'from behind', 'kneeling', 'straddling', 'spread legs', 'on chair',
-  'kissing', 'hugging', 'embrace', 'grabbing', 'touching',
+  'handjob', 'paizuri', 'titfuck', 'doggystyle',
+]
+
+const COMPLEX_POSE_MARKERS = [
+  'breast press', 'from behind', 'kneeling', 'straddling', 'spread legs',
+  'on chair', 'kissing', 'hugging', 'embrace', 'grabbing', 'touching',
 ]
 
 function hasPromptMarker(prompt: string, marker: string): boolean {
@@ -88,9 +91,12 @@ function hasPromptMarker(prompt: string, marker: string): boolean {
 }
 
 export function isComplexInteractionScene(prompt: string): boolean {
+  if (INHERENT_MULTI_PERSON_INTERACTION_MARKERS.some(marker => hasPromptMarker(prompt, marker))) {
+    return true
+  }
   const hasOtherPerson = OTHER_PERSON_MARKERS.some(marker => hasPromptMarker(prompt, marker))
   if (!hasOtherPerson) return false
-  return COMPLEX_INTERACTION_MARKERS.some(marker => hasPromptMarker(prompt, marker))
+  return COMPLEX_POSE_MARKERS.some(marker => hasPromptMarker(prompt, marker))
 }
 
 export function buildComfyPrompt(
