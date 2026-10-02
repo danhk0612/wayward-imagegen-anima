@@ -173,6 +173,28 @@ else {
   Write-Host "No game-root legacy art folder for $Character."
 }
 
+# The downloaded image pack has two parts: the image files under images/ and
+# one or more images-<character>-*.js manifests next to index.html. Leaving the
+# manifests behind after deleting the files makes the game still believe that
+# the static pack is installed. Move only this character's manifests aside so
+# fresh local-generation requests are authoritative, while keeping an easy
+# rollback copy.
+$disabledPackDir = Join-Path $GameRoot ("_disabled-imagepacks\" + $Character)
+$packManifests = @(Get-ChildItem -Path $GameRoot -File -Filter ("images-" + $Character + "-*.js") -ErrorAction SilentlyContinue)
+if ($packManifests.Count -gt 0) {
+  New-Item -ItemType Directory -Path $disabledPackDir -Force | Out-Null
+  foreach ($manifest in $packManifests) {
+    $dest = Join-Path $disabledPackDir $manifest.Name
+    Move-Item $manifest.FullName $dest -Force
+    Write-Host "Disabled static image-pack manifest:"
+    Write-Host "  $($manifest.FullName)"
+    Write-Host "  -> $dest"
+  }
+}
+else {
+  Write-Host "No static image-pack manifests found for $Character."
+}
+
 $batchDir = Join-Path $imagesRoot ".state\batch"
 if (Test-Path $batchDir) {
   Remove-Item $batchDir -Recurse -Force
