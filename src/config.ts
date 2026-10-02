@@ -272,7 +272,8 @@ export function parseArgs(argv: string[]): Record<string, string> {
 function readConfigFile(file: string): Record<string, unknown> {
   try {
     if (!fs.existsSync(file)) return {}
-    return JSON.parse(fs.readFileSync(file, 'utf-8')) as Record<string, unknown>
+    const raw = fs.readFileSync(file, 'utf-8').replace(/^\uFEFF/, '')
+    return JSON.parse(raw) as Record<string, unknown>
   } catch (err) {
     console.warn(`[config] ignoring unreadable ${file}: ${(err as Error).message}`)
     return {}
