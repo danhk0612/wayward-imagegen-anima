@@ -163,6 +163,16 @@ else {
 
 Remove-CharacterCacheEntries (Join-Path $imagesRoot ".image-cache.json") $Character
 
+$legacyCharacterDir = Join-Path $GameRoot ("images\illustrious\characters\" + $Character)
+if (Test-Path $legacyCharacterDir) {
+  Remove-Item $legacyCharacterDir -Recurse -Force
+  Write-Host "Deleted legacy/shipped game-root art so Wayward will request fresh renders:"
+  Write-Host "  $legacyCharacterDir"
+}
+else {
+  Write-Host "No game-root legacy art folder for $Character."
+}
+
 $batchDir = Join-Path $imagesRoot ".state\batch"
 if (Test-Path $batchDir) {
   Remove-Item $batchDir -Recurse -Force
@@ -190,6 +200,28 @@ if (-not $KeepDevelopmentTestArtifacts) {
   }
 }
 
+Write-Step "Install one-click Wayward launcher"
+
+$launcherSource = Join-Path $SourceRoot "scripts\wayward-ai-launcher.ps1"
+$launcherPs1 = Join-Path $GameRoot "Wayward-AI.ps1"
+$launcherCmd = Join-Path $GameRoot "Wayward-AI.cmd"
+
+Copy-Item $launcherSource $launcherPs1 -Force
+
+$launcherCmdText = @'
+@echo off
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0Wayward-AI.ps1"
+if errorlevel 1 pause
+'@
+[System.IO.File]::WriteAllText(
+  $launcherCmd,
+  $launcherCmdText,
+  [System.Text.Encoding]::ASCII
+)
+
+Write-Host "Launcher installed:"
+Write-Host "  $launcherCmd"
+
 Write-Step "Production validation"
 
 Push-Location $TargetRoot
@@ -216,5 +248,8 @@ Write-Host ""
 Write-Host "New $Character images will be generated into:"
 Write-Host "  $(Join-Path $imagesRoot ("illustrious\characters\" + $Character))"
 Write-Host ""
-Write-Host "The old $Character generated art/cache was removed; other cached characters were preserved."
-Write-Host "Start the production backend from $TargetRoot, then play Wayward. Foreground play requests have priority over batch generation."
+Write-Host "The old $Character generated art/cache and game-root legacy art were removed; other cached characters were preserved."
+Write-Host "Normal use:"
+Write-Host "  1. Start ComfyUI."
+Write-Host "  2. Double-click $(Join-Path $GameRoot "Wayward-AI.cmd")."
+Write-Host "The launcher starts wayward-imagegen when needed and then opens Wayward."
