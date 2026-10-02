@@ -28,6 +28,7 @@
       ],
       "triggerPrompt": "elena_trigger",
       "basePrompt": "1girl, character-specific fixed appearance tags",
+      "gamePromptPrefixToStrip": "masterpiece, best quality, 1girl, original game identity tags",
       "positivePromptPrefix": "",
       "positivePromptSuffix": "",
       "negativePromptPrefix": "",
