@@ -74,6 +74,19 @@ textarea{min-height:80px;resize:vertical}.inline{display:flex;gap:8px;align-item
       <div class="row"><label for="cfg">CFG</label><input id="cfg" type="number" min="0" max="30" step="0.1"></div>
       <div class="row"><label for="sampler">Sampler</label><select id="sampler"></select></div>
       <div class="row"><label for="scheduler">Scheduler</label><select id="scheduler"></select></div>
+      <div class="row">
+        <label for="animaDimensions">해상도</label>
+        <div>
+          <input id="animaDimensions" list="dimensionPresets" placeholder="비우면 게임 요청 해상도 사용">
+          <datalist id="dimensionPresets">
+            <option value="1216 x 832 (1.46:1)"></option>
+            <option value="1152 x 768 (1.5:1)"></option>
+            <option value="1024 x 704 (1.45:1)"></option>
+            <option value="1024 x 1024 (1:1)"></option>
+          </datalist>
+          <div class="hint">비워두면 Wayward가 요청한 해상도를 사용합니다. 값을 지정하면 native Anima에서 서버가 그 해상도를 강제합니다.</div>
+        </div>
+      </div>
     </div>
     <div class="card">
       <h2>전역 프롬프트</h2>
@@ -261,6 +274,7 @@ function collect(){
     animaModel:$('animaModel').value,
     animaTextEncoder:$('textEncoder').value,
     animaVae:$('vae').value,
+    animaDimensions:$('animaDimensions').value.trim(),
     steps:Number($('steps').value),
     cfg:Number($('cfg').value),
     sampler:$('sampler').value,
@@ -276,7 +290,7 @@ function collect(){
 function buildSummary(){
   const s=collect();
   $('summary').textContent=
-    `ComfyUI: ${s.comfyUrl}\nModel: ${s.animaModel}\nEncoder: ${s.animaTextEncoder}\nVAE: ${s.animaVae}\nRender: ${s.steps} steps / CFG ${s.cfg} / ${s.sampler} / ${s.scheduler}\nCharacters: ${Object.keys(s.characterProfiles).join(', ')||'(없음)'}`;
+    `ComfyUI: ${s.comfyUrl}\nModel: ${s.animaModel}\nEncoder: ${s.animaTextEncoder}\nVAE: ${s.animaVae}\nResolution: ${s.animaDimensions||'게임 요청 사용'}\nRender: ${s.steps} steps / CFG ${s.cfg} / ${s.sampler} / ${s.scheduler}\nCharacters: ${Object.keys(s.characterProfiles).join(', ')||'(없음)'}`;
 }
 $('validateSetup').onclick=async()=>{
   $('validationResult').textContent='검사 중…';
@@ -364,6 +378,7 @@ async function init(){
     fillSelect($('animaModel'),[],settings.animaModel);fillSelect($('textEncoder'),[],settings.animaTextEncoder);fillSelect($('vae'),[],settings.animaVae);
     fillSelect($('sampler'),[],settings.sampler);fillSelect($('scheduler'),[],settings.scheduler);
     $('steps').value=settings.steps;$('cfg').value=settings.cfg;
+    $('animaDimensions').value=settings.animaDimensions||'';
     $('quality').value=settings.steps===26?'fast':settings.steps===30?'balanced':settings.steps===36?'quality':'custom';
     $('positivePrefix').value=settings.positivePromptPrefix||'';$('positiveSuffix').value=settings.positivePromptSuffix||'';
     $('negativePrefix').value=settings.negativePromptPrefix||'';$('negativeSuffix').value=settings.negativePromptSuffix||'';
