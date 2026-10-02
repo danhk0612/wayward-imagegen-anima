@@ -49,9 +49,16 @@ if (-not $backendReady) {
 
   New-Item -ItemType Directory -Path $stateDir -Force | Out-Null
 
+  # Get-Command bun can resolve to a PowerShell shim/script rather than bun.exe.
+  # Passing that shim directly to Start-Process raises
+  # "%1 is not a valid Win32 application" on some Bun installations.
+  # Launch it through PowerShell so the same command resolution that works in
+  # the user's terminal is used here as well.
+  $bunCommand = "& bun 'src\cli.ts'"
+
   Start-Process `
-    -FilePath $bun.Source `
-    -ArgumentList @("src\cli.ts") `
+    -FilePath "powershell.exe" `
+    -ArgumentList @("-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", $bunCommand) `
     -WorkingDirectory $backendRoot `
     -WindowStyle Hidden `
     -RedirectStandardOutput $stdoutLog `
