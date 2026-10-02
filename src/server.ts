@@ -86,7 +86,7 @@ export function buildRouter(deps: {
     jobs: deps.jobs,
     logMiss: makeMissLogger(deps.config.stateDir),
   })
-  registerSetupRoutes(router, deps.config)
+  registerSetupRoutes(router, deps.config, deps.cache)
   registerControlRoutes(router, {
     batch: deps.batch,
     jobs: deps.jobs,
