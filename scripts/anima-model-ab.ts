@@ -148,13 +148,25 @@ console.log('  render      36 steps / CFG 4.5 / er_sde / simple')
 console.log('  policy      complex-scene adaptive policy disabled for clean model comparison')
 console.log('')
 
-const objectInfo = await jsonFetch<unknown>(`${cfg.comfyUrl}/object_info/UNETLoader`)
-const unetChoices = [...new Set(collectStrings(objectInfo).filter(v => v.toLowerCase().endsWith('.safetensors')))]
+const [unetObjectInfo, checkpointObjectInfo] = await Promise.all([
+  jsonFetch<unknown>(`${cfg.comfyUrl}/object_info/UNETLoader`),
+  jsonFetch<unknown>(`${cfg.comfyUrl}/object_info/CheckpointLoaderSimple`).catch(() => ({})),
+])
+const unetChoices = [...new Set(collectStrings(unetObjectInfo).filter(v => v.toLowerCase().endsWith('.safetensors')))]
+const checkpointChoices = [...new Set(collectStrings(checkpointObjectInfo).filter(v => v.toLowerCase().endsWith('.safetensors')))]
 const resolvedModels = models
-  .map(requested => ({ requested, actual: resolveChoice(requested, unetChoices) }))
-  .filter((item): item is { requested: string; actual: string } => {
+  .map(requested => ({
+    requested,
+    actual: resolveChoice(requested, unetChoices),
+    checkpointOnly: resolveChoice(requested, checkpointChoices),
+  }))
+  .filter((item): item is { requested: string; actual: string; checkpointOnly: string | null } => {
     if (item.actual) return true
-    console.warn(`SKIP  ${item.requested} — not available to ComfyUI UNETLoader`)
+    if (item.checkpointOnly) {
+      console.warn(`SKIP  ${item.requested} — visible to CheckpointLoaderSimple as "${item.checkpointOnly}", but not to UNETLoader`)
+    } else {
+      console.warn(`SKIP  ${item.requested} — not visible to ComfyUI UNETLoader`)
+    }
     return false
   })
 
