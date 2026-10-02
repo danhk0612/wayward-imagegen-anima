@@ -24,6 +24,7 @@ import { registerReviewRoutes, ReviewStore } from './routes/review.ts'
 import { registerVideoRoutes } from './routes/video.ts'
 import { registerExportRoutes } from './routes/export.ts'
 import { registerSetupRoutes } from './routes/setup.ts'
+import { registerControlRoutes } from './routes/control.ts'
 import { BatchQueue } from './batch/queue.ts'
 import { registerBatchRoutes } from './batch/routes.ts'
 
@@ -76,6 +77,7 @@ export function buildRouter(deps: {
   jobs: JobRunner
   review: ReviewStore
   batch: BatchQueue
+  shutdown: () => void
 }): Router {
   const router = new Router()
   registerImageRoutes(router, {
@@ -85,6 +87,11 @@ export function buildRouter(deps: {
     logMiss: makeMissLogger(deps.config.stateDir),
   })
   registerSetupRoutes(router, deps.config)
+  registerControlRoutes(router, {
+    batch: deps.batch,
+    jobs: deps.jobs,
+    shutdown: deps.shutdown,
+  })
   registerBatchRoutes(router, deps.batch)
   registerExportRoutes(router, {
     config: deps.config,
@@ -131,7 +138,17 @@ export async function startServer(config: Config): Promise<ServerHandle> {
   // unasked would be a surprise.
   const batch = new BatchQueue(config, cache, jobs).resume()
 
-  const router = buildRouter({ config, cache, hits, comfy, jobs, review, batch })
+  let requestShutdown: () => void = () => {}
+  const router = buildRouter({
+    config,
+    cache,
+    hits,
+    comfy,
+    jobs,
+    review,
+    batch,
+    shutdown: () => requestShutdown(),
+  })
   const uiDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'ui')
 
   const server = http.createServer((req, res) => {
@@ -207,17 +224,23 @@ export async function startServer(config: Config): Promise<ServerHandle> {
   const address = server.address()
   const port = typeof address === 'object' && address ? address.port : config.port
 
+  let closing = false
+  const closeRuntime = async (): Promise<void> => {
+    if (closing) return
+    closing = true
+    batch.pause()
+    jobs.stop()
+    hits.close()
+    // `server.close()` only resolves once every connection has ended, and a
+    // keep-alive socket never ends on its own — so without this a shutdown
+    // waits forever on an idle browser tab.
+    server.closeAllConnections?.()
+    await new Promise<void>(resolve => server.close(() => resolve()))
+  }
+  requestShutdown = () => { void closeRuntime() }
+
   return {
     server, config, cache, hits, jobs, comfy, batch, port,
-    async close() {
-      batch.pause()
-      jobs.stop()
-      hits.close()
-      // `server.close()` only resolves once every connection has ended, and a
-      // keep-alive socket never ends on its own — so without this a shutdown
-      // waits forever on an idle browser tab.
-      server.closeAllConnections?.()
-      await new Promise<void>(resolve => server.close(() => resolve()))
-    },
+    close: closeRuntime,
   }
 }
