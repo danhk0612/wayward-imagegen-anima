@@ -89,6 +89,10 @@ textarea{min-height:80px;resize:vertical}.inline{display:flex;gap:8px;align-item
       <h2>설정 확인</h2>
       <div class="hint">저장하면 기존 JSON 설정은 자동 백업됩니다. 저장 후 backend를 재시작해야 변경 내용이 완전히 적용됩니다.</div>
       <div id="summary" class="status"></div>
+      <div class="inline" style="margin-top:10px">
+        <button id="validateSetup">설정 검사</button>
+      </div>
+      <div id="validationResult" class="status" style="margin-top:10px">아직 검사하지 않았습니다.</div>
     </div>
     <div class="card">
       <h2>작업 제어</h2>
@@ -274,6 +278,23 @@ function buildSummary(){
   $('summary').textContent=
     `ComfyUI: ${s.comfyUrl}\nModel: ${s.animaModel}\nEncoder: ${s.animaTextEncoder}\nVAE: ${s.animaVae}\nRender: ${s.steps} steps / CFG ${s.cfg} / ${s.sampler} / ${s.scheduler}\nCharacters: ${Object.keys(s.characterProfiles).join(', ')||'(없음)'}`;
 }
+$('validateSetup').onclick=async()=>{
+  $('validationResult').textContent='검사 중…';
+  $('validationResult').className='status';
+  try{
+    const b=await api('/api/setup/validate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({settings:collect()})});
+    const lines=[];
+    if(b.ok)lines.push('✓ 필수 Anima 설정이 ComfyUI에서 확인되었습니다.');
+    for(const w of (b.warnings||[]))lines.push('주의: '+w);
+    for(const e of (b.errors||[]))lines.push('오류: '+e);
+    $('validationResult').textContent=lines.join('\n')||'검사 결과가 없습니다.';
+    $('validationResult').className='status '+(b.ok?'ok':'err');
+  }catch(e){
+    $('validationResult').textContent='검사 실패: '+e.message;
+    $('validationResult').className='status err';
+  }
+};
+
 $('quality').onchange=()=>{
   const v=$('quality').value;if(v==='fast')$('steps').value=26;else if(v==='balanced')$('steps').value=30;else if(v==='quality')$('steps').value=36;
 };
