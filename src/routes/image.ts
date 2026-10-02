@@ -98,6 +98,14 @@ function renderSignature(config: Config, body: GenerateBody): string {
       ? `${l.name}:${l.strengthModel}`
       : `${l.name}:${l.strengthModel}:${l.strengthClip}`)
     .join(',')
+  const scenePromptHints = Object.entries(config.scenePromptHints)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([k, v]) => `${k}=${v}`)
+    .join(';')
+  const sceneNegativePromptHints = Object.entries(config.sceneNegativePromptHints)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([k, v]) => `${k}=${v}`)
+    .join(';')
 
   return [
     `preset:${config.imagePreset}`,
@@ -119,6 +127,8 @@ function renderSignature(config: Config, body: GenerateBody): string {
     `pps:${profile?.positivePromptSuffix ?? ''}|${config.positivePromptSuffix}`,
     `npp:${config.negativePromptPrefix}|${profile?.negativePromptPrefix ?? ''}`,
     `nps:${profile?.negativePromptSuffix ?? ''}|${config.negativePromptSuffix}`,
+    `scenePromptHints:${scenePromptHints}`,
+    `sceneNegativePromptHints:${sceneNegativePromptHints}`,
   ].join('|')
 }
 
