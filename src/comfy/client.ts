@@ -316,6 +316,35 @@ export class ComfyClient {
       return false
     }
   }
+  /** Running prompt ids, split into "ours" and "everything currently sampling". */
+  async runningIds(): Promise<{ all: Set<string>; ours: Set<string> }> {
+    const q = await this.queue()
+    const all = new Set<string>()
+    const ours = new Set<string>()
+    if (!q) return { all, ours }
+    for (const entry of q.queue_running ?? []) {
+      const id = queueEntryPromptId(entry)
+      if (!id) continue
+      all.add(id)
+      if (isOwnQueueEntry(entry)) ours.add(id)
+    }
+    return { all, ours }
+  }
+
+  /**
+   * Interrupt ComfyUI's current sampling. /interrupt affects running work
+   * globally, so callers must first prove every running prompt belongs to us.
+   */
+  async interrupt(): Promise<boolean> {
+    try {
+      const res = await fetch(`${this.baseUrl}/interrupt`, { method: 'POST' })
+      return res.ok
+    } catch {
+      return false
+    }
+  }
+
+
 
   /** Pending prompt ids, split into "ours" and "everything queued". */
   async pendingIds(): Promise<{ all: Set<string>; ours: Set<string> }> {
