@@ -1,0 +1,25 @@
+name: Lite release
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-lite:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - name: Smoke tests
+        run: bun scripts/smoke.ts
+      - name: Build Lite ZIP
+        shell: pwsh
+        run: ./scripts/build-lite-release.ps1
+      - name: Upload Lite package
+        uses: actions/upload-artifact@v4
+        with:
+          name: Wayward-Anima-ImageGen-Lite
+          path: dist/*.zip
+          if-no-files-found: error
