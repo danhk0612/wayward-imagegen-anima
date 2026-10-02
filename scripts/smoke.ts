@@ -22,6 +22,7 @@ fs.writeFileSync(configPath, JSON.stringify({
       loras: [{ name: 'elena.safetensors', strengthModel: 0.85 }],
       triggerPrompt: 'elena_trigger',
       basePrompt: 'silver hair, blue eyes',
+      gamePromptPrefixToStrip: 'masterpiece, best quality, 1girl, old_elena, black hair, medium breasts',
     },
   },
 }), 'utf8')
@@ -29,7 +30,7 @@ fs.writeFileSync(configPath, JSON.stringify({
 const cfg = resolveConfig([], tmp)
 const graph = buildComfyPrompt(
   cfg,
-  'standing in a tavern, casual clothes',
+  'masterpiece, best quality, 1girl, old_elena, black hair, medium breasts, standing in a tavern, casual clothes',
   'bad anatomy',
   'smoke_portrait',
   'illustrious',
@@ -53,6 +54,7 @@ assert(positive, 'Character trigger prompt must be present in the positive promp
 const positiveText = String(positive.inputs?.text ?? '')
 assert(positiveText.includes('silver hair, blue eyes'), 'Character base prompt must be present')
 assert(positiveText.includes('standing in a tavern, casual clothes'), 'Wayward scene prompt must remain present')
+assert(!positiveText.includes('old_elena'), 'Original game identity prompt must be stripped when configured')
 assert(positiveText.indexOf('elena_trigger') < positiveText.indexOf('standing in a tavern'), 'Character identity prompt must precede the dynamic scene')
 
 const hashA = resolvePromptHash({
@@ -72,6 +74,7 @@ fs.writeFileSync(configPath, JSON.stringify({
       loras: [{ name: 'elena.safetensors', strengthModel: 0.85 }],
       triggerPrompt: 'elena_trigger_v2',
       basePrompt: 'silver hair, blue eyes',
+      gamePromptPrefixToStrip: 'masterpiece, best quality, 1girl, old_elena, black hair, medium breasts',
     },
   },
 }), 'utf8')
