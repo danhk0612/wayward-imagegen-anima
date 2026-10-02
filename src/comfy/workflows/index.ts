@@ -240,7 +240,11 @@ export function buildAnimaPrompt(
   const modelName = allowTuningOverrides
     ? (overrides?.checkpoint?.trim() || config.animaModel)
     : config.animaModel
-  const { width, height } = parseDimensions(overrides?.dimensions)
+  const configuredDimensions = config.animaDimensions.trim()
+  const effectiveDimensions = allowTuningOverrides
+    ? (overrides?.dimensions ?? configuredDimensions || undefined)
+    : (configuredDimensions || overrides?.dimensions)
+  const { width, height } = parseDimensions(effectiveDimensions)
 
   const characterName = talentName ? extractCharacterName(talentName, config.characterDirs) : null
   const profile: CharacterProfile | undefined = characterName ? config.characterProfiles[characterName] : undefined
