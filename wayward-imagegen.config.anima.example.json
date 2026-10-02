@@ -1,31 +1,34 @@
 {
-  "_comment": "Example config for an Anima-first setup. Replace every model/LoRA filename and trigger prompt with your exact local setup.",
+  "_comment": "Anima Base v1 example. Replace LoRA filenames, triggerPrompt and basePrompt with the exact values used by your LoRA.",
   "port": 8189,
   "host": "127.0.0.1",
   "imagesDir": "images",
   "comfyUrl": "http://127.0.0.1:8188",
 
   "imagePreset": "anima",
-  "checkpoint": "your_anima_checkpoint.safetensors",
+  "animaModel": "anima-base-v1.0.safetensors",
+  "animaTextEncoder": "qwen_3_06b_base.safetensors",
+  "animaVae": "qwen_image_vae.safetensors",
 
-  "_speed_lora_note": "Optional model-only speed LoRA. Keep empty unless your tested Anima workflow actually uses one.",
+  "_turbo_note": "Optional Anima Turbo/speed LoRA applied to every render. Leave empty for normal base generation.",
   "lora": "",
   "loraStrength": 1,
 
-  "_global_lora_note": "Optional full model+clip LoRAs applied to every character. Usually leave empty and use characterProfiles instead.",
+  "_global_lora_note": "Optional model-only Anima LoRAs applied to every character. Usually leave this empty and use characterProfiles.",
   "characterLoras": [],
 
-  "_profile_note": "Wayward requests contain the character name. The server automatically selects the matching profile, LoRA and trigger/base prompt.",
+  "_profile_note": "One server handles all characters. Wayward talentName selects the matching profile. triggerPrompt is the LoRA activation token; basePrompt is the character identity description that must stay stable across scenes.",
   "characterProfiles": {
     "elena": {
       "loras": [
         {
           "name": "elena_anima_character.safetensors",
-          "strengthModel": 0.9,
-          "strengthClip": 0.9
+          "strengthModel": 0.9
         }
       ],
-      "positivePromptPrefix": "elena_trigger, 1girl, character-specific appearance tags",
+      "triggerPrompt": "elena_trigger",
+      "basePrompt": "1girl, character-specific fixed appearance tags",
+      "positivePromptPrefix": "",
       "positivePromptSuffix": "",
       "negativePromptPrefix": "",
       "negativePromptSuffix": ""
@@ -34,11 +37,12 @@
       "loras": [
         {
           "name": "mara_anima_character.safetensors",
-          "strengthModel": 0.9,
-          "strengthClip": 0.9
+          "strengthModel": 0.9
         }
       ],
-      "positivePromptPrefix": "mara_trigger, 1girl, character-specific appearance tags",
+      "triggerPrompt": "mara_trigger",
+      "basePrompt": "1girl, character-specific fixed appearance tags",
+      "positivePromptPrefix": "",
       "positivePromptSuffix": "",
       "negativePromptPrefix": "",
       "negativePromptSuffix": ""
@@ -47,28 +51,28 @@
       "loras": [
         {
           "name": "pippa_anima_character.safetensors",
-          "strengthModel": 0.9,
-          "strengthClip": 0.9
+          "strengthModel": 0.9
         }
       ],
-      "positivePromptPrefix": "pippa_trigger, 1girl, character-specific appearance tags",
+      "triggerPrompt": "pippa_trigger",
+      "basePrompt": "1girl, character-specific fixed appearance tags",
+      "positivePromptPrefix": "",
       "positivePromptSuffix": "",
       "negativePromptPrefix": "",
       "negativePromptSuffix": ""
     }
   },
 
-  "_global_prompt_note": "Global tags wrap every Wayward scene prompt. Character profile tags are inserted between the global prefix and the game's scene prompt.",
+  "_prompt_note": "Final positive prompt = global prefix + triggerPrompt + basePrompt + character prefix + Wayward scene prompt + character suffix + global suffix.",
   "positivePromptPrefix": "masterpiece, best quality",
   "positivePromptSuffix": "",
-  "negativePromptPrefix": "worst quality, low quality, bad anatomy",
+  "negativePromptPrefix": "worst quality, low quality, score_1, score_2, score_3, bad anatomy, bad hands, text, watermark, signature",
   "negativePromptSuffix": "",
 
-  "steps": 20,
-  "cfg": 5,
-  "sampler": "dpmpp_2m",
-  "scheduler": "karras",
-  "clipSkip": -2,
+  "steps": 30,
+  "cfg": 4,
+  "sampler": "er_sde",
+  "scheduler": "simple",
 
   "maxDiskGb": 0,
   "maxQueued": 64,
