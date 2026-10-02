@@ -4,19 +4,15 @@
   "host": "127.0.0.1",
   "imagesDir": "images",
   "comfyUrl": "http://127.0.0.1:8188",
-
   "imagePreset": "anima",
   "animaModel": "anima-base-v1.0.safetensors",
   "animaTextEncoder": "qwen_3_06b_base.safetensors",
   "animaVae": "qwen_image_vae.safetensors",
-
   "_turbo_note": "Optional Anima Turbo/speed LoRA applied to every render. Leave empty for normal base generation.",
   "lora": "",
   "loraStrength": 1,
-
   "_global_lora_note": "Optional model-only Anima LoRAs applied to every character. Usually leave this empty and use characterProfiles.",
   "characterLoras": [],
-
   "_profile_note": "One server handles all characters. Wayward talentName selects the matching profile. triggerPrompt is the LoRA activation token; basePrompt is the character identity description that must stay stable across scenes.",
   "characterProfiles": {
     "elena": {
@@ -63,7 +59,6 @@
       "negativePromptSuffix": ""
     }
   },
-
   "_complex_scene_note": "Generic prompt-driven policy for difficult multi-person/contact poses. It does not depend on individual scene names. characterLoraScale applies only to the selected character profile LoRA(s), not global/style LoRAs.",
   "complexScenePolicy": {
     "enabled": false,
@@ -71,25 +66,22 @@
     "positivePrompt": "two distinct people, clear body separation, coherent anatomy, correct limb count, clear interaction",
     "negativePrompt": "merged bodies, fused bodies, conjoined bodies, duplicate body, duplicate person, extra torso, extra arms, extra legs, disconnected limbs, malformed limbs"
   },
-
   "_scene_hint_note": "Optional exceptions only. Leave these empty unless one specific scene still needs special handling.",
   "scenePromptHints": {},
   "sceneNegativePromptHints": {},
-
   "_prompt_note": "Final positive prompt = global prefix + triggerPrompt + basePrompt + character prefix + automatic complex-scene hint + optional scene exception + Wayward scene prompt + character suffix + global suffix.",
   "positivePromptPrefix": "masterpiece, best quality",
   "positivePromptSuffix": "",
   "negativePromptPrefix": "worst quality, low quality, score_1, score_2, score_3, bad anatomy, bad hands, text, watermark, signature",
   "negativePromptSuffix": "",
-
-  "steps": 36,
+  "steps": 30,
   "cfg": 4.5,
   "sampler": "er_sde",
   "scheduler": "simple",
-
   "maxDiskGb": 0,
   "maxQueued": 64,
   "maxImagesPerHour": 400,
   "allowDelete": false,
-  "wanWorkflowPath": ""
+  "wanWorkflowPath": "",
+  "animaDimensions": ""
 }
