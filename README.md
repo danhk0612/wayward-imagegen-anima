@@ -1,76 +1,75 @@
 # wayward-imagegen-anima
 
-An Anima-focused adaptation of Wayward's local `wayward-imagegen` backend.
+An Anima-focused adaptation of Wayward's local image-generation backend.
 
-## Purpose
+## Current purpose
 
-This project keeps Wayward's existing image-generation API while changing the
-local ComfyUI rendering path so it can use:
+The project keeps Wayward's existing image-generation HTTP contract and changes
+the renderer so existing Wayward characters can be **regenerated in real time**
+with:
 
-- an **Anima checkpoint**,
+- native **Anima Base** model loading,
 - **per-character Anima LoRAs**,
-- per-character LoRA trigger/base prompts,
-- global prompt defaults,
-- Wayward's own dynamic scene/action/outfit prompt.
+- per-character LoRA trigger prompts,
+- stable per-character base prompts,
+- Wayward's dynamic scene/action/outfit prompt,
+- local caching and review tooling.
 
-It is designed first for **real-time regeneration of images for Wayward's
-existing characters**. It does not, by itself, add a new playable character to
-the game's story/state/event system.
+It does **not** by itself create a new playable Wayward character. A brand-new
+character also needs game-side character/state/dialogue/event integration.
 
-See [ANIMA_SETUP.md](./ANIMA_SETUP.md) for the Anima-specific configuration and
-behaviour.
+See [ANIMA_SETUP.md](./ANIMA_SETUP.md) for configuration details.
 
-## Character selection model
+## Character selection
 
-Run one backend for the whole game. When Wayward requests an image, the request
-contains a character-derived `talentName`. The backend resolves that name to a
-character profile such as `elena`, `mara` or `pippa`, then automatically applies
-that profile's LoRA and trigger/base prompt.
-
-Example:
+One backend handles all configured characters. Wayward's `talentName` is used
+to select a profile automatically:
 
 ```text
-Wayward requests: Elena + tavern scene
-       ↓
-character profile: elena
-       ↓
-Anima checkpoint
-+ Elena LoRA
-+ Elena trigger/base prompt
+Wayward: Elena + current scene
+        ↓
+profile: characterProfiles.elena
+        ↓
+Anima diffusion model + Qwen encoder + Qwen VAE
++ Elena character LoRA
++ Elena triggerPrompt
++ Elena basePrompt
 + Wayward dynamic scene prompt
-       ↓
-ComfyUI render
-       ↓
-cache + return image to Wayward
+        ↓
+render → cache → Wayward
 ```
+
+There is no need to restart or change the model configuration manually when the
+requested character changes.
 
 ## Prompt composition
 
-The final positive prompt is:
-
 ```text
-[global positive prefix]
-+ [character profile positive prefix / LoRA trigger / fixed appearance]
-+ [Wayward scene prompt]
-+ [character profile positive suffix]
-+ [global positive suffix]
+[global prefix]
++ [character trigger]
++ [stable character base prompt]
++ [character prefix]
++ [Wayward dynamic scene prompt]
++ [character suffix]
++ [global suffix]
 ```
 
-The negative prompt follows the same pattern.
+This keeps LoRA identity information stable while allowing Wayward to vary the
+pose, clothing, location and action per scene.
 
-This means the LoRA's required trigger token and stable identity traits belong in
-`characterProfiles.<character>.positivePromptPrefix`, while pose, clothing,
-location and action can stay dynamic from Wayward.
+## Native Anima path
+
+Anima is loaded as separate components rather than as an SDXL checkpoint:
+
+- `anima-base-v1.0.safetensors`
+- `qwen_3_06b_base.safetensors`
+- `qwen_image_vae.safetensors`
+
+The native ComfyUI graph uses `UNETLoader + CLIPLoader + VAELoader + KSampler`.
+Character/style LoRAs are applied model-only to the Anima diffusion model before
+the sampler.
 
 ## Quick start
-
-Requirements:
-
-- Bun
-- ComfyUI
-- an Anima checkpoint that already works in your ComfyUI environment
-- one or more Anima character LoRAs
-- the custom node packs required by the graph (checked by `doctor`)
 
 Copy:
 
@@ -84,39 +83,23 @@ to:
 wayward-imagegen.config.json
 ```
 
-Then replace the placeholder checkpoint, LoRA filenames and trigger prompts with
-values from your own ComfyUI setup.
-
-Validate:
+Fill in your exact character LoRA filenames, trigger prompts and base prompts,
+then validate the whole local render chain:
 
 ```bash
 bun src/cli.ts doctor
 ```
 
-Run:
+Start the server:
 
 ```bash
 bun src/cli.ts
 ```
 
-Then use Wayward's **Settings -> Image generation -> Automatic**, or point it to
-`http://127.0.0.1:8189`.
+The default Wayward-facing address is `http://127.0.0.1:8189`.
 
-## New playable characters
+## Renderer backend status
 
-This backend can render a new character *after the game knows that character and
-starts requesting images for it*. A brand-new playable character therefore has
-two separate layers:
-
-1. **Game-side work** — character definition, state, dialogue/events and image
-   request keys.
-2. **Image backend work** — add the character folder/profile, LoRA and trigger
-   prompt here.
-
-Only layer 2 is covered by this repository.
-
-## Upstream behaviour retained
-
-The backend still acts as a small local HTTP server between Wayward and ComfyUI,
-keeps a local image cache, supports ahead-of-time generation/review, and serves
-locally generated images back to the game.
+The current renderer uses **ComfyUI**. Forge Neo also supports Anima, but it
+exposes the A1111/Forge API rather than the ComfyUI graph API; direct Forge Neo
+support is therefore a distinct backend rather than just changing the URL.
