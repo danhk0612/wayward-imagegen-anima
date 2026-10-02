@@ -192,22 +192,27 @@ function normalizeSettings(value: unknown): SetupSettings {
 }
 
 function currentSettings(config: Config): SetupSettings {
+  const firstAnimaSetup = config.imagePreset !== 'anima'
   return {
     comfyUrl: config.comfyUrl,
     imagePreset: 'anima',
     animaModel: config.animaModel,
     animaTextEncoder: config.animaTextEncoder,
     animaVae: config.animaVae,
-    steps: config.steps,
-    cfg: config.cfg,
-    sampler: config.sampler,
-    scheduler: config.scheduler,
-    positivePromptPrefix: config.positivePromptPrefix,
+    steps: firstAnimaSetup ? 30 : config.steps,
+    cfg: firstAnimaSetup ? 4.5 : config.cfg,
+    sampler: firstAnimaSetup ? 'er_sde' : config.sampler,
+    scheduler: firstAnimaSetup ? 'simple' : config.scheduler,
+    positivePromptPrefix: firstAnimaSetup
+      ? 'masterpiece, best quality'
+      : config.positivePromptPrefix,
     positivePromptSuffix: config.positivePromptSuffix,
-    negativePromptPrefix: config.negativePromptPrefix,
+    negativePromptPrefix: firstAnimaSetup
+      ? 'worst quality, low quality, score_1, score_2, score_3, bad anatomy, bad hands, text, watermark, signature'
+      : config.negativePromptPrefix,
     negativePromptSuffix: config.negativePromptSuffix,
     characterDirs: [...config.characterDirs],
-    characterProfiles: config.characterProfiles,
+    characterProfiles: firstAnimaSetup ? {} : config.characterProfiles,
   }
 }
 
@@ -280,6 +285,9 @@ export function registerSetupRoutes(router: Router, config: Config): void {
     requireLocal(ctx)
     sendJson(ctx.res, 200, {
       configPath: config.configFilePath,
+      configured: fs.existsSync(config.configFilePath)
+        && config.imagePreset === 'anima'
+        && Object.keys(config.characterProfiles).length > 0,
       settings: currentSettings(config),
       note: 'Saving changes writes the JSON config. Restart wayward-imagegen to apply them.',
     })
