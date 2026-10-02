@@ -67,6 +67,8 @@ export interface Config {
   animaModel: string
   animaTextEncoder: string
   animaVae: string
+  /** Optional server-forced native Anima dimensions. Empty means use the game request. */
+  animaDimensions: string
 
   /** Prompt text affixes automatically applied before sending work to ComfyUI. */
   positivePromptPrefix: string
@@ -369,6 +371,7 @@ export function resolveConfig(argv: string[] = [], cwd = process.cwd()): Config 
     animaModel: pick('anima-model', 'ANIMA_MODEL', 'animaModel', DEFAULT_ANIMA_MODEL),
     animaTextEncoder: pick('anima-text-encoder', 'ANIMA_TEXT_ENCODER', 'animaTextEncoder', DEFAULT_ANIMA_TEXT_ENCODER),
     animaVae: pick('anima-vae', 'ANIMA_VAE', 'animaVae', DEFAULT_ANIMA_VAE),
+    animaDimensions: pick('anima-dimensions', 'ANIMA_DIMENSIONS', 'animaDimensions', ''),
     positivePromptPrefix: pick('positive-prefix', 'WAYWARD_POSITIVE_PREFIX', 'positivePromptPrefix', ''),
     positivePromptSuffix: pick('positive-suffix', 'WAYWARD_POSITIVE_SUFFIX', 'positivePromptSuffix', ''),
     negativePromptPrefix: pick('negative-prefix', 'WAYWARD_NEGATIVE_PREFIX', 'negativePromptPrefix', ''),
