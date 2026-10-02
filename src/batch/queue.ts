@@ -71,6 +71,7 @@ export class BatchQueue {
   private lastError: string | null = null
   private consecutiveFailures = 0
   private stopRequested = false
+  private loggedAnimaOverrideIsolation = false
 
   constructor(
     private readonly config: Config,
@@ -169,6 +170,7 @@ export class BatchQueue {
     this.stopRequested = false
     this.consecutiveFailures = 0
     this.lastError = null
+    this.loggedAnimaOverrideIsolation = false
 
     try {
       fs.mkdirSync(this.dir, { recursive: true })
@@ -269,6 +271,19 @@ export class BatchQueue {
   private async renderOne(item: BatchItem): Promise<ItemOutcome> {
     const workflow = item.workflow ?? 'illustrious'
     const imageType = item.imageType ?? 'portrait'
+
+    if (
+      this.config.verbose
+      && this.config.imagePreset === 'anima'
+      && !this.loggedAnimaOverrideIsolation
+      && (item.steps !== undefined || item.cfg !== undefined || item.loraStrength !== undefined || !!item.checkpoint)
+    ) {
+      console.log(
+        `[batch] native Anima uses server tuning ${this.config.steps} steps / CFG ${this.config.cfg} / ${this.config.sampler} / ${this.config.scheduler}; `
+        + `game overrides are isolated (steps=${item.steps ?? '-'}, cfg=${item.cfg ?? '-'}, lora=${item.loraStrength ?? '-'}, checkpoint=${item.checkpoint || '-'})`,
+      )
+      this.loggedAnimaOverrideIsolation = true
+    }
     const promptHash = resolvePromptHash({
       talentName: item.talentId,
       prompt: item.prompt,
