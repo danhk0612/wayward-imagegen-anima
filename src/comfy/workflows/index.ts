@@ -242,7 +242,7 @@ export function buildAnimaPrompt(
     : config.animaModel
   const configuredDimensions = config.animaDimensions.trim()
   const effectiveDimensions = allowTuningOverrides
-    ? (overrides?.dimensions ?? configuredDimensions || undefined)
+    ? ((overrides?.dimensions ?? configuredDimensions) || undefined)
     : (configuredDimensions || overrides?.dimensions)
   const { width, height } = parseDimensions(effectiveDimensions)
 
