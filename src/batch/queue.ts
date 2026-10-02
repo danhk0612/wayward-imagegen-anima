@@ -15,7 +15,7 @@ import * as path from 'node:path'
 import type { Config, WorkflowType } from '../config.ts'
 import type { CacheStore } from '../cache/cacheStore.ts'
 import type { JobRunner } from '../comfy/jobRunner.ts'
-import { derivePromptHash } from '../naming.ts'
+import { resolvePromptHash, resolveDimensions } from '../routes/image.ts'
 
 export interface BatchItem {
   talentId: string
