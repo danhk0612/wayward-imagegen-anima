@@ -46,6 +46,9 @@ export interface GenerateBody {
   cfg?: number
   loraStrength?: number
   checkpoint?: string
+  sampler?: string
+  scheduler?: string
+  disableComplexScenePolicy?: boolean
   width?: number
   height?: number
   dimensions?: string
@@ -90,6 +93,9 @@ function renderSignature(config: Config, body: GenerateBody): string {
   const steps = body.steps ?? config.steps
   const cfg = body.cfg ?? config.cfg
   const speedLoraStrength = body.loraStrength ?? config.loraStrength
+  const sampler = body.sampler ?? config.sampler
+  const scheduler = body.scheduler ?? config.scheduler
+  const disableComplexScenePolicy = body.disableComplexScenePolicy === true
   const talentName = body.talentName ?? body.talentId ?? ''
   const characterName = extractCharacterName(talentName, config.characterDirs)
   const profile = characterName ? config.characterProfiles[characterName] : undefined
@@ -115,8 +121,8 @@ function renderSignature(config: Config, body: GenerateBody): string {
     `steps:${steps}`,
     `cfg:${cfg}`,
     `clipSkip:${config.imagePreset === 'illustrious' ? config.clipSkip : ''}`,
-    `sampler:${config.sampler}`,
-    `scheduler:${config.scheduler}`,
+    `sampler:${sampler}`,
+    `scheduler:${scheduler}`,
     `speedLora:${config.lora}:${speedLoraStrength}`,
     `character:${characterName ?? 'unknown'}`,
     `characterLoras:${characterLoras}`,
@@ -129,7 +135,7 @@ function renderSignature(config: Config, body: GenerateBody): string {
     `nps:${profile?.negativePromptSuffix ?? ''}|${config.negativePromptSuffix}`,
     `scenePromptHints:${scenePromptHints}`,
     `sceneNegativePromptHints:${sceneNegativePromptHints}`,
-    `complexScenePolicy:${JSON.stringify(config.complexScenePolicy)}`,
+    `complexScenePolicy:${disableComplexScenePolicy ? 'disabled' : JSON.stringify(config.complexScenePolicy)}`,
   ].join('|')
 }
 
@@ -278,6 +284,9 @@ export function registerImageRoutes(router: Router, deps: ImageRouteDeps): void 
         cfg: body.cfg,
         loraStrength: body.loraStrength,
         checkpoint: body.checkpoint,
+        sampler: body.sampler,
+        scheduler: body.scheduler,
+        disableComplexScenePolicy: body.disableComplexScenePolicy,
         dimensions: resolveDimensions(body),
       },
       bulk,
