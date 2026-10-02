@@ -23,6 +23,10 @@ foreach ($dir in @("src", "ui")) {
   Copy-Item (Join-Path $RepoRoot $dir) (Join-Path $backend $dir) -Recurse -Force
 }
 
+$runtimeScripts = Join-Path $backend "scripts"
+New-Item -ItemType Directory -Path $runtimeScripts -Force | Out-Null
+Copy-Item (Join-Path (Join-Path $RepoRoot "scripts") "smoke.ts") (Join-Path $runtimeScripts "smoke.ts") -Force
+
 foreach ($file in @(
   "package.json",
   "LICENSE",
@@ -36,7 +40,7 @@ foreach ($file in @(
   if (Test-Path $source) { Copy-Item $source (Join-Path $backend $file) -Force }
 }
 
-Copy-Item (Join-Path $RepoRoot "scripts\wayward-ai-launcher.ps1") (Join-Path $stage "Wayward-Anima.ps1") -Force
+Copy-Item (Join-Path (Join-Path $RepoRoot "scripts") "wayward-ai-launcher.ps1") (Join-Path $stage "Wayward-Anima.ps1") -Force
 
 $cmd = @'
 @echo off
