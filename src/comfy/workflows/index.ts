@@ -53,6 +53,16 @@ function composeNegativePrompt(prefix: string, prompt: string, suffix: string): 
   return [prefix, prompt, suffix].map(s => s.trim()).filter(Boolean).join(', ')
 }
 
+function stripGamePromptPrefix(prompt: string, prefix: string | undefined): string {
+  const wanted = (prefix ?? '').trim().replace(/,+\s*$/, '')
+  if (!wanted) return prompt.trim()
+  const text = prompt.trim()
+  if (text.toLowerCase().startsWith(wanted.toLowerCase())) {
+    return text.slice(wanted.length).replace(/^\s*,\s*/, '').trim()
+  }
+  return text
+}
+
 export function buildComfyPrompt(
   cfg: Config,
   textPrompt: string,
@@ -194,9 +204,10 @@ export function buildAnimaPrompt(
     profile?.basePrompt ?? '',
     profile?.positivePromptPrefix ?? '',
   ].map(part => part.trim()).filter(Boolean).join(', ')
+  const scenePrompt = stripGamePromptPrefix(textPrompt, profile?.gamePromptPrefixToStrip)
   const finalTextPrompt = composePrompt(
     composePrompt(config.positivePromptPrefix, characterPrefix, ''),
-    textPrompt,
+    scenePrompt,
     composePrompt('', profile?.positivePromptSuffix ?? '', config.positivePromptSuffix),
   )
   const finalNegativePrompt = composeNegativePrompt(
@@ -340,9 +351,10 @@ function buildSdxlLikePrompt(
     profile?.basePrompt ?? '',
     profile?.positivePromptPrefix ?? '',
   ].map(part => part.trim()).filter(Boolean).join(', ')
+  const scenePrompt = stripGamePromptPrefix(textPrompt, profile?.gamePromptPrefixToStrip)
   const finalTextPrompt = composePrompt(
     composePrompt(config.positivePromptPrefix, characterPrefix, ''),
-    textPrompt,
+    scenePrompt,
     composePrompt('', profile?.positivePromptSuffix ?? '', config.positivePromptSuffix),
   )
   const finalNegativePrompt = composeNegativePrompt(
