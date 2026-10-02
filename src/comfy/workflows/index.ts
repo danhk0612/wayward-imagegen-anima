@@ -16,6 +16,9 @@ export interface GenOverrides {
   loraStrength?: number
   checkpoint?: string
   dimensions?: string
+  sampler?: string
+  scheduler?: string
+  disableComplexScenePolicy?: boolean
 }
 
 export type ComfyGraph = Record<string, object>
@@ -230,6 +233,8 @@ export function buildAnimaPrompt(
   const actualSeed = seed ?? randomSeed()
   const steps = overrides?.steps ?? config.steps
   const cfg = overrides?.cfg ?? config.cfg
+  const sampler = overrides?.sampler ?? config.sampler
+  const scheduler = overrides?.scheduler ?? config.scheduler
   const modelName = overrides?.checkpoint?.trim() || config.animaModel
   const { width, height } = parseDimensions(overrides?.dimensions)
 
@@ -242,7 +247,9 @@ export function buildAnimaPrompt(
   ].map(part => part.trim()).filter(Boolean).join(', ')
   const scenePrompt = stripGamePromptPrefix(textPrompt, profile?.gamePromptPrefixToStrip)
   const sceneSlug = extractSceneSlug(talentName)
-  const isComplexInteraction = config.complexScenePolicy.enabled && isComplexInteractionScene(scenePrompt)
+  const isComplexInteraction = !overrides?.disableComplexScenePolicy
+    && config.complexScenePolicy.enabled
+    && isComplexInteractionScene(scenePrompt)
   const genericSceneHint = isComplexInteraction ? config.complexScenePolicy.positivePrompt : ''
   const genericSceneNegativeHint = isComplexInteraction ? config.complexScenePolicy.negativePrompt : ''
   const specificSceneHint = sceneSlug ? config.scenePromptHints[sceneSlug] ?? '' : ''
@@ -348,8 +355,8 @@ export function buildAnimaPrompt(
       seed: actualSeed,
       steps,
       cfg,
-      sampler_name: config.sampler,
-      scheduler: config.scheduler,
+      sampler_name: sampler,
+      scheduler,
       denoise: 1,
       model: modelOutput,
       positive: ['3003', 0],
@@ -389,6 +396,8 @@ function buildSdxlLikePrompt(
   const actualSeed = seed ?? randomSeed()
   const steps = overrides?.steps ?? config.steps
   const cfg = overrides?.cfg ?? config.cfg
+  const sampler = overrides?.sampler ?? config.sampler
+  const scheduler = overrides?.scheduler ?? config.scheduler
   const speedLoraStrength = overrides?.loraStrength ?? config.loraStrength ?? 1
   const checkpoint = overrides?.checkpoint?.trim() || config.checkpoint
   const characterName = talentName ? extractCharacterName(talentName, config.characterDirs) : null
@@ -400,7 +409,9 @@ function buildSdxlLikePrompt(
   ].map(part => part.trim()).filter(Boolean).join(', ')
   const scenePrompt = stripGamePromptPrefix(textPrompt, profile?.gamePromptPrefixToStrip)
   const sceneSlug = extractSceneSlug(talentName)
-  const isComplexInteraction = config.complexScenePolicy.enabled && isComplexInteractionScene(scenePrompt)
+  const isComplexInteraction = !overrides?.disableComplexScenePolicy
+    && config.complexScenePolicy.enabled
+    && isComplexInteractionScene(scenePrompt)
   const genericSceneHint = isComplexInteraction ? config.complexScenePolicy.positivePrompt : ''
   const genericSceneNegativeHint = isComplexInteraction ? config.complexScenePolicy.negativePrompt : ''
   const specificSceneHint = sceneSlug ? config.scenePromptHints[sceneSlug] ?? '' : ''
@@ -574,8 +585,8 @@ function buildSdxlLikePrompt(
       seed: actualSeed,
       steps,
       cfg,
-      sampler_name: config.sampler,
-      scheduler: config.scheduler,
+      sampler_name: sampler,
+      scheduler,
       denoise: 1,
       basic_pipe: ['158', 0],
       latent_image: ['1457', 0],
