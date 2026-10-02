@@ -63,6 +63,12 @@ function stripGamePromptPrefix(prompt: string, prefix: string | undefined): stri
   return text
 }
 
+function extractSceneSlug(talentName?: string): string | null {
+  if (!talentName) return null
+  const match = talentName.match(/__scene-(.+?)__outfit-/i)
+  return match?.[1]?.trim().toLowerCase() || null
+}
+
 export function buildComfyPrompt(
   cfg: Config,
   textPrompt: string,
@@ -205,13 +211,16 @@ export function buildAnimaPrompt(
     profile?.positivePromptPrefix ?? '',
   ].map(part => part.trim()).filter(Boolean).join(', ')
   const scenePrompt = stripGamePromptPrefix(textPrompt, profile?.gamePromptPrefixToStrip)
+  const sceneSlug = extractSceneSlug(talentName)
+  const sceneHint = sceneSlug ? config.scenePromptHints[sceneSlug] ?? '' : ''
+  const sceneNegativeHint = sceneSlug ? config.sceneNegativePromptHints[sceneSlug] ?? '' : ''
   const finalTextPrompt = composePrompt(
-    composePrompt(config.positivePromptPrefix, characterPrefix, ''),
+    composePrompt(config.positivePromptPrefix, characterPrefix, sceneHint),
     scenePrompt,
     composePrompt('', profile?.positivePromptSuffix ?? '', config.positivePromptSuffix),
   )
   const finalNegativePrompt = composeNegativePrompt(
-    composeNegativePrompt(config.negativePromptPrefix, profile?.negativePromptPrefix ?? '', ''),
+    composeNegativePrompt(config.negativePromptPrefix, profile?.negativePromptPrefix ?? '', sceneNegativeHint),
     negativePrompt,
     composeNegativePrompt('', profile?.negativePromptSuffix ?? '', config.negativePromptSuffix),
   )
@@ -352,13 +361,16 @@ function buildSdxlLikePrompt(
     profile?.positivePromptPrefix ?? '',
   ].map(part => part.trim()).filter(Boolean).join(', ')
   const scenePrompt = stripGamePromptPrefix(textPrompt, profile?.gamePromptPrefixToStrip)
+  const sceneSlug = extractSceneSlug(talentName)
+  const sceneHint = sceneSlug ? config.scenePromptHints[sceneSlug] ?? '' : ''
+  const sceneNegativeHint = sceneSlug ? config.sceneNegativePromptHints[sceneSlug] ?? '' : ''
   const finalTextPrompt = composePrompt(
-    composePrompt(config.positivePromptPrefix, characterPrefix, ''),
+    composePrompt(config.positivePromptPrefix, characterPrefix, sceneHint),
     scenePrompt,
     composePrompt('', profile?.positivePromptSuffix ?? '', config.positivePromptSuffix),
   )
   const finalNegativePrompt = composeNegativePrompt(
-    composeNegativePrompt(config.negativePromptPrefix, profile?.negativePromptPrefix ?? '', ''),
+    composeNegativePrompt(config.negativePromptPrefix, profile?.negativePromptPrefix ?? '', sceneNegativeHint),
     negativePrompt,
     composeNegativePrompt('', profile?.negativePromptSuffix ?? '', config.negativePromptSuffix),
   )
