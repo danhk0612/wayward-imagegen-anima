@@ -129,6 +129,7 @@ function renderSignature(config: Config, body: GenerateBody): string {
     `nps:${profile?.negativePromptSuffix ?? ''}|${config.negativePromptSuffix}`,
     `scenePromptHints:${scenePromptHints}`,
     `sceneNegativePromptHints:${sceneNegativePromptHints}`,
+    `complexScenePolicy:${JSON.stringify(config.complexScenePolicy)}`,
   ].join('|')
 }
 
