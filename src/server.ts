@@ -23,6 +23,7 @@ import { registerCatalogueRoutes } from './routes/catalogue.ts'
 import { registerReviewRoutes, ReviewStore } from './routes/review.ts'
 import { registerVideoRoutes } from './routes/video.ts'
 import { registerExportRoutes } from './routes/export.ts'
+import { registerSetupRoutes } from './routes/setup.ts'
 import { BatchQueue } from './batch/queue.ts'
 import { registerBatchRoutes } from './batch/routes.ts'
 
@@ -83,6 +84,7 @@ export function buildRouter(deps: {
     jobs: deps.jobs,
     logMiss: makeMissLogger(deps.config.stateDir),
   })
+  registerSetupRoutes(router, deps.config)
   registerBatchRoutes(router, deps.batch)
   registerExportRoutes(router, {
     config: deps.config,
