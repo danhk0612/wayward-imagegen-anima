@@ -255,9 +255,10 @@ export class JobRunner {
     const active = this.activeJobs()
     for (const job of active) job.cancelRequested = true
 
-    const activeIds = new Set(active.map(job => job.promptId))
     const pending = await this.comfy.pendingIds()
-    const pendingIds = [...pending.ours].filter(id => activeIds.has(id))
+    // Include recognisable stale prompts from an earlier backend process too.
+    // They still belong to this backend and otherwise survive a restart/shutdown.
+    const pendingIds = [...pending.ours]
     let pendingCancelled = 0
     if (pendingIds.length > 0 && await this.comfy.deletePending(pendingIds)) {
       pendingCancelled = pendingIds.length
@@ -268,7 +269,7 @@ export class JobRunner {
     }
 
     const running = await this.comfy.runningIds()
-    const ownedRunning = [...running.ours].filter(id => activeIds.has(id))
+    const ownedRunning = [...running.ours]
     const safeToInterrupt = running.all.size > 0
       && running.all.size === running.ours.size
       && ownedRunning.length > 0
