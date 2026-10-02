@@ -25,6 +25,12 @@ fs.writeFileSync(configPath, JSON.stringify({
       gamePromptPrefixToStrip: 'masterpiece, best quality, 1girl, old_elena, black hair, medium breasts',
     },
   },
+  scenePromptHints: {
+    test_pose: '1girl, 1boy, two distinct people, clear body separation',
+  },
+  sceneNegativePromptHints: {
+    test_pose: 'merged bodies, extra torso',
+  },
 }), 'utf8')
 
 const cfg = resolveConfig([], tmp)
@@ -37,7 +43,7 @@ const graph = buildComfyPrompt(
   123,
   undefined,
   undefined,
-  'elena__scene-tavern',
+  'elena__scene-test_pose__outfit-casual',
 )
 
 const nodes = Object.values(graph) as Array<{ class_type?: string; inputs?: Record<string, unknown> }>
@@ -55,6 +61,9 @@ const positiveText = String(positive.inputs?.text ?? '')
 assert(positiveText.includes('silver hair, blue eyes'), 'Character base prompt must be present')
 assert(positiveText.includes('standing in a tavern, casual clothes'), 'Wayward scene prompt must remain present')
 assert(!positiveText.includes('old_elena'), 'Original game identity prompt must be stripped when configured')
+assert(positiveText.includes('two distinct people'), 'Scene-specific positive hint must be applied')
+const negative = nodes.find(n => n.class_type === 'CLIPTextEncode' && String(n.inputs?.text ?? '').includes('merged bodies'))
+assert(negative, 'Scene-specific negative hint must be applied')
 assert(positiveText.indexOf('elena_trigger') < positiveText.indexOf('standing in a tavern'), 'Character identity prompt must precede the dynamic scene')
 
 const hashA = resolvePromptHash({
@@ -76,6 +85,12 @@ fs.writeFileSync(configPath, JSON.stringify({
       basePrompt: 'silver hair, blue eyes',
       gamePromptPrefixToStrip: 'masterpiece, best quality, 1girl, old_elena, black hair, medium breasts',
     },
+  },
+  scenePromptHints: {
+    test_pose: '1girl, 1boy, two distinct people, clear body separation',
+  },
+  sceneNegativePromptHints: {
+    test_pose: 'merged bodies, extra torso',
   },
 }), 'utf8')
 const cfg2 = resolveConfig([], tmp)
