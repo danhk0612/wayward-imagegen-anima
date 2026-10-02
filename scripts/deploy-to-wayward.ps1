@@ -1,6 +1,8 @@
 param(
   [string]$GameRoot = "E:\GAME\Wayward",
   [string]$Character = "elena",
+  [switch]$ResetCharacterArt,
+  [switch]$InstallDevelopmentConfig,
   [switch]$KeepDevelopmentTestArtifacts
 )
 
@@ -100,6 +102,8 @@ foreach ($file in @(
   "package.json",
   "README.md",
   "ANIMA_SETUP.md",
+  "DISTRIBUTION.md",
+  "NOTICE.md",
   "LICENSE",
   "wayward-imagegen.config.example.json",
   "wayward-imagegen.config.anima.example.json"
@@ -110,95 +114,89 @@ foreach ($file in @(
   }
 }
 
-Write-Step "Install the production Anima configuration"
+Write-Step "Preserve/install production configuration"
 
 $sourceConfig = Join-Path $SourceRoot "wayward-imagegen.config.json"
-if (-not (Test-Path $sourceConfig)) {
-  throw "Tested Anima config not found: $sourceConfig"
+if ((Test-Path $targetConfig) -and -not $InstallDevelopmentConfig) {
+  Write-Host "Keeping existing production config:"
+  Write-Host "  $targetConfig"
 }
-
-$config = Get-Content $sourceConfig -Raw | ConvertFrom-Json
-$config.imagesDir = "images"
-$config.steps = 30
-$config.cfg = 4.5
-$config.sampler = "er_sde"
-$config.scheduler = "simple"
-
-if ($config.complexScenePolicy) {
-  $config.complexScenePolicy.enabled = $false
-}
-
-if ($config.PSObject.Properties.Name -contains "stateDir") {
-  if ([string]$config.stateDir -like "*images-quality-test*") {
-    $config.stateDir = "images\.state"
+elseif (Test-Path $sourceConfig) {
+  $config = Get-Content $sourceConfig -Raw | ConvertFrom-Json
+  $config.imagesDir = "images"
+  if ($config.PSObject.Properties.Name -contains "stateDir") {
+    if ([string]$config.stateDir -like "*images-quality-test*") {
+      $config.stateDir = "images\.state"
+    }
   }
-}
-
-Write-Utf8NoBom $targetConfig ($config | ConvertTo-Json -Depth 50)
-
-Write-Host "imagesDir : $($config.imagesDir)"
-Write-Host "preset    : $($config.imagePreset)"
-Write-Host "model     : $($config.animaModel)"
-Write-Host "render    : $($config.steps) steps / CFG $($config.cfg) / $($config.sampler) / $($config.scheduler)"
-if ($config.characterProfiles.$Character) {
-  $loraText = @($config.characterProfiles.$Character.loras | ForEach-Object {
-    "$($_.name):$($_.strengthModel)"
-  }) -join ", "
-  Write-Host "$Character LoRA: $loraText"
-}
-
-Write-Step "Reset only the production character art"
-
-$imagesRoot = Join-Path $TargetRoot "images"
-New-Item -ItemType Directory -Path $imagesRoot -Force | Out-Null
-
-$characterDir = Join-Path $imagesRoot ("illustrious\characters\" + $Character)
-if (Test-Path $characterDir) {
-  Remove-Item $characterDir -Recurse -Force
-  Write-Host "Deleted generated art: $characterDir"
+  Write-Utf8NoBom $targetConfig ($config | ConvertTo-Json -Depth 50)
+  Write-Host "Installed development config into production:"
+  Write-Host "  $targetConfig"
 }
 else {
-  Write-Host "No existing generated art folder for $Character."
+  Write-Host "No config installed. The first-run browser wizard will create one."
 }
 
-Remove-CharacterCacheEntries (Join-Path $imagesRoot ".image-cache.json") $Character
-
-$legacyCharacterDir = Join-Path $GameRoot ("images\illustrious\characters\" + $Character)
-if (Test-Path $legacyCharacterDir) {
-  Remove-Item $legacyCharacterDir -Recurse -Force
-  Write-Host "Deleted legacy/shipped game-root art so Wayward will request fresh renders:"
-  Write-Host "  $legacyCharacterDir"
-}
-else {
-  Write-Host "No game-root legacy art folder for $Character."
-}
-
-# The downloaded image pack has two parts: the image files under images/ and
-# one or more images-<character>-*.js manifests next to index.html. Leaving the
-# manifests behind after deleting the files makes the game still believe that
-# the static pack is installed. Move only this character's manifests aside so
-# fresh local-generation requests are authoritative, while keeping an easy
-# rollback copy.
-$disabledPackDir = Join-Path $GameRoot ("_disabled-imagepacks\" + $Character)
-$packManifests = @(Get-ChildItem -Path $GameRoot -File -Filter ("images-" + $Character + "-*.js") -ErrorAction SilentlyContinue)
-if ($packManifests.Count -gt 0) {
-  New-Item -ItemType Directory -Path $disabledPackDir -Force | Out-Null
-  foreach ($manifest in $packManifests) {
-    $dest = Join-Path $disabledPackDir $manifest.Name
-    Move-Item $manifest.FullName $dest -Force
-    Write-Host "Disabled static image-pack manifest:"
-    Write-Host "  $($manifest.FullName)"
-    Write-Host "  -> $dest"
+if ($ResetCharacterArt) {
+  Write-Step "Reset only the production character art"
+  
+  $imagesRoot = Join-Path $TargetRoot "images"
+  New-Item -ItemType Directory -Path $imagesRoot -Force | Out-Null
+  
+  $characterDir = Join-Path $imagesRoot ("illustrious\characters\" + $Character)
+  if (Test-Path $characterDir) {
+    Remove-Item $characterDir -Recurse -Force
+    Write-Host "Deleted generated art: $characterDir"
   }
+  else {
+    Write-Host "No existing generated art folder for $Character."
+  }
+  
+  Remove-CharacterCacheEntries (Join-Path $imagesRoot ".image-cache.json") $Character
+  
+  $legacyCharacterDir = Join-Path $GameRoot ("images\illustrious\characters\" + $Character)
+  if (Test-Path $legacyCharacterDir) {
+    Remove-Item $legacyCharacterDir -Recurse -Force
+    Write-Host "Deleted legacy/shipped game-root art so Wayward will request fresh renders:"
+    Write-Host "  $legacyCharacterDir"
+  }
+  else {
+    Write-Host "No game-root legacy art folder for $Character."
+  }
+  
+  # The downloaded image pack has two parts: the image files under images/ and
+  # one or more images-<character>-*.js manifests next to index.html. Leaving the
+  # manifests behind after deleting the files makes the game still believe that
+  # the static pack is installed. Move only this character's manifests aside so
+  # fresh local-generation requests are authoritative, while keeping an easy
+  # rollback copy.
+  $disabledPackDir = Join-Path $GameRoot ("_disabled-imagepacks\" + $Character)
+  $packManifests = @(Get-ChildItem -Path $GameRoot -File -Filter ("images-" + $Character + "-*.js") -ErrorAction SilentlyContinue)
+  if ($packManifests.Count -gt 0) {
+    New-Item -ItemType Directory -Path $disabledPackDir -Force | Out-Null
+    foreach ($manifest in $packManifests) {
+      $dest = Join-Path $disabledPackDir $manifest.Name
+      Move-Item $manifest.FullName $dest -Force
+      Write-Host "Disabled static image-pack manifest:"
+      Write-Host "  $($manifest.FullName)"
+      Write-Host "  -> $dest"
+    }
+  }
+  else {
+    Write-Host "No static image-pack manifests found for $Character."
+  }
+  
+  $batchDir = Join-Path $imagesRoot ".state\batch"
+  if (Test-Path $batchDir) {
+    Remove-Item $batchDir -Recurse -Force
+    Write-Host "Cleared old batch state."
+  }
+  
+  
 }
 else {
-  Write-Host "No static image-pack manifests found for $Character."
-}
-
-$batchDir = Join-Path $imagesRoot ".state\batch"
-if (Test-Path $batchDir) {
-  Remove-Item $batchDir -Recurse -Force
-  Write-Host "Cleared old batch state."
+  Write-Step "Preserve existing generated/static character art"
+  Write-Host "Character art reset skipped. Use -ResetCharacterArt only when a clean regeneration is intentional."
 }
 
 Write-Step "Remove known test-only artifacts from the production backend"
@@ -270,7 +268,12 @@ Write-Host ""
 Write-Host "New $Character images will be generated into:"
 Write-Host "  $(Join-Path $imagesRoot ("illustrious\characters\" + $Character))"
 Write-Host ""
-Write-Host "The old $Character generated art/cache and game-root legacy art were removed; other cached characters were preserved."
+if ($ResetCharacterArt) {
+  Write-Host "The old $Character generated art/cache and game-root legacy art were reset."
+}
+else {
+  Write-Host "Existing generated art, cache and static image packs were preserved."
+}
 Write-Host "Normal use:"
 Write-Host "  1. Start ComfyUI."
 Write-Host "  2. Double-click $(Join-Path $GameRoot "Wayward-AI.cmd")."
