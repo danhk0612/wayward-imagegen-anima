@@ -92,6 +92,11 @@ textarea{min-height:80px;resize:vertical}.inline{display:flex;gap:8px;align-item
         <button id="resumeBatch">미리 생성 재개</button>
         <button id="clearBatch" class="danger">대기열 비우기</button>
       </div>
+      <div class="inline" style="margin-top:10px">
+        <button id="cancelActive" class="danger">현재 AI 작업 취소</button>
+        <button id="shutdown" class="danger">AI 서버 종료</button>
+      </div>
+      <div class="hint" style="margin-top:8px">현재 작업 취소는 이 백엔드가 만든 ComfyUI 작업만 대상으로 합니다. 수동 ComfyUI 작업이 함께 실행 중이면 안전을 위해 실행 중 샘플러는 강제 중단하지 않습니다.</div>
     </div>
   </section>
 
@@ -251,6 +256,22 @@ async function loadBatch(){
 $('pauseBatch').onclick=async()=>{await api('/api/batch/pause',{method:'POST'});loadBatch()};
 $('resumeBatch').onclick=async()=>{await api('/api/batch/resume',{method:'POST'});loadBatch()};
 $('clearBatch').onclick=async()=>{if(confirm('대기 중인 미리 생성 목록을 비울까요?')){await api('/api/batch/clear',{method:'POST'});loadBatch()}};
+$('cancelActive').onclick=async()=>{
+  if(!confirm('현재 backend가 생성 중인 이미지 작업을 취소할까요?'))return;
+  try{
+    const b=await api('/api/control/cancel-active',{method:'POST'});
+    alert(`취소 요청 완료\n대기 취소: ${b.pendingCancelled}\n실행 중 중단: ${b.runningInterrupted?'예':'아니오'}\n남은 실행 중 작업: ${b.runningLeft}`);
+    loadBatch();
+  }catch(e){alert('취소 실패: '+e.message)}
+};
+$('shutdown').onclick=async()=>{
+  if(!confirm('AI 서버를 종료할까요?\n미리 생성은 일시정지되고 backend 소유 작업은 안전하게 취소됩니다.'))return;
+  try{
+    await api('/api/control/shutdown',{method:'POST'});
+    $('topStatus').textContent='AI 서버 종료 중…';
+    setTimeout(()=>{$('topStatus').textContent='AI 서버가 종료되었습니다. Wayward-AI.cmd로 다시 시작할 수 있습니다.'},700);
+  }catch(e){alert('종료 실패: '+e.message)}
+};
 
 $('save').onclick=async()=>{
   $('save').disabled=true;$('topStatus').textContent='저장 중…';
