@@ -1,8 +1,12 @@
 param(
-  [string]$GameRoot = "E:\GAME\Wayward"
+  [string]$GameRoot = ""
 )
 
 $ErrorActionPreference = "Stop"
+
+if ([string]::IsNullOrWhiteSpace($GameRoot)) {
+  $GameRoot = $PSScriptRoot
+}
 
 $backendRoot = Join-Path $GameRoot "wayward-imagegen"
 $gameEntry   = Join-Path $GameRoot "index.html"
@@ -73,6 +77,28 @@ if (-not $backendReady) {
   if (-not $backendReady) {
     throw "wayward-imagegen did not become ready. Check: $stderrLog"
   }
+}
+
+$configPath = Join-Path $backendRoot "wayward-imagegen.config.json"
+$setupRequired = $true
+if (Test-Path $configPath) {
+  try {
+    $cfg = Get-Content $configPath -Raw | ConvertFrom-Json
+    $profileCount = 0
+    if ($cfg.characterProfiles) {
+      $profileCount = @($cfg.characterProfiles.PSObject.Properties).Count
+    }
+    $setupRequired = ($cfg.imagePreset -ne "anima") -or ($profileCount -lt 1)
+  }
+  catch {
+    $setupRequired = $true
+  }
+}
+
+if ($setupRequired) {
+  Start-Process "http://127.0.0.1:8189/setup.html"
+  Write-Host "Initial setup is required. The setup page has been opened."
+  exit 0
 }
 
 Start-Process $gameEntry
