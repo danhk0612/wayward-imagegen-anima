@@ -54,7 +54,7 @@ if (-not $backendReady) {
   # "%1 is not a valid Win32 application" on some Bun installations.
   # Launch it through PowerShell so the same command resolution that works in
   # the user's terminal is used here as well.
-  $bunCommand = "& bun 'src\cli.ts'"
+  $bunCommand = "& bun 'src\cli.ts' --verbose"
 
   Start-Process `
     -FilePath "powershell.exe" `
