@@ -244,6 +244,53 @@ export class JobRunner {
     return { cancelled: true, running: false, queueState }
   }
 
+  /**
+   * Cancel every active prompt owned by this backend.
+   *
+   * Pending work is removed from ComfyUI. Running work is interrupted only when
+   * every currently-running ComfyUI prompt is recognisably ours; otherwise we
+   * leave ComfyUI alone so a manual workflow cannot be killed accidentally.
+   */
+  async cancelAllOwn(): Promise<{ pendingCancelled: number; runningInterrupted: boolean; runningLeft: number }> {
+    const active = this.activeJobs()
+    for (const job of active) job.cancelRequested = true
+
+    const activeIds = new Set(active.map(job => job.promptId))
+    const pending = await this.comfy.pendingIds()
+    const pendingIds = [...pending.ours].filter(id => activeIds.has(id))
+    let pendingCancelled = 0
+    if (pendingIds.length > 0 && await this.comfy.deletePending(pendingIds)) {
+      pendingCancelled = pendingIds.length
+      for (const id of pendingIds) {
+        const job = this.jobs.get(id)
+        if (job) this.markCancelled(job, 'cancelled by local control')
+      }
+    }
+
+    const running = await this.comfy.runningIds()
+    const ownedRunning = [...running.ours].filter(id => activeIds.has(id))
+    const safeToInterrupt = running.all.size > 0
+      && running.all.size === running.ours.size
+      && ownedRunning.length > 0
+
+    let runningInterrupted = false
+    if (safeToInterrupt) {
+      runningInterrupted = await this.comfy.interrupt()
+      if (runningInterrupted) {
+        for (const id of ownedRunning) {
+          const job = this.jobs.get(id)
+          if (job) this.markCancelled(job, 'cancelled by local control')
+        }
+      }
+    }
+
+    return {
+      pendingCancelled,
+      runningInterrupted,
+      runningLeft: runningInterrupted ? 0 : ownedRunning.length,
+    }
+  }
+
   /** Drop queued foreground prompts other than `exceptKey`. */
   private async supersede(exceptKey: string): Promise<number> {
     const { all, ours } = await this.comfy.pendingIds()
@@ -317,6 +364,11 @@ export class JobRunner {
       try {
         const result = await this.comfy.history(promptId)
         if (this.finalizing.has(promptId) || !isActive(job)) continue
+
+        if (job.cancelRequested && result.done) {
+          this.markCancelled(job, 'cancelled')
+          continue
+        }
 
         if (result.error) {
           job.status = 'error'
