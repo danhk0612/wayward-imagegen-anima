@@ -71,32 +71,49 @@ the sampler.
 
 ## Quick start
 
-Copy:
+### Browser setup
+
+For normal users, start ComfyUI and then start this backend. Open:
 
 ```text
-wayward-imagegen.config.anima.example.json
+http://127.0.0.1:8189/setup.html
 ```
 
-to:
+The setup wizard can:
 
-```text
-wayward-imagegen.config.json
-```
+- detect diffusion models, text encoders, VAEs, samplers and LoRAs from ComfyUI,
+- add/remove Wayward character profiles,
+- configure one or more character LoRAs with strengths,
+- edit trigger, base and optional prompt-affix text,
+- validate the selected Anima components against the live ComfyUI instance,
+- disable/restore downloaded static image packs per character,
+- delete only locally generated art for one character,
+- pause/resume/clear pre-generation work,
+- safely cancel backend-owned ComfyUI work and shut down the backend.
 
-Fill in your exact character LoRA filenames, trigger prompts and base prompts,
-then validate the whole local render chain:
+Settings are written to `wayward-imagegen.config.json`. Existing settings are
+backed up automatically before the UI writes a replacement. A backend restart
+is required after changing generation settings.
+
+### Command-line setup
+
+The JSON configuration remains fully supported. Copy
+`wayward-imagegen.config.anima.example.json` to
+`wayward-imagegen.config.json`, edit it, then run:
 
 ```bash
 bun src/cli.ts doctor
-```
-
-Start the server:
-
-```bash
 bun src/cli.ts
 ```
 
 The default Wayward-facing address is `http://127.0.0.1:8189`.
+
+### Lite distribution
+
+`scripts/build-lite-release.ps1` creates a small ZIP containing only the
+runtime backend, browser UI, MIT/NOTICE files and the one-click launcher.
+ComfyUI, models, LoRAs, Wayward, generated images and development artifacts are
+not bundled. See [DISTRIBUTION.md](./DISTRIBUTION.md).
 
 ## Renderer backend status
 
