@@ -16,6 +16,7 @@ fs.writeFileSync(configPath, JSON.stringify({
   animaModel: 'anima-base-v1.0.safetensors',
   animaTextEncoder: 'qwen_3_06b_base.safetensors',
   animaVae: 'qwen_image_vae.safetensors',
+  animaDimensions: '1152 x 768 (1.5:1)',
   lora: '',
   steps: 36,
   cfg: 4.5,
@@ -62,6 +63,8 @@ assert(classTypes.includes('VAELoader'), 'Anima graph must load the Qwen image V
 assert(classTypes.includes('LoraLoaderModelOnly'), 'Anima character LoRA must use model-only loader')
 assert(!classTypes.includes('CheckpointLoaderSimple'), 'Anima graph must not use SDXL CheckpointLoaderSimple')
 assert(!classTypes.includes('ModelSamplingAuraFlow'), 'Anima Base v1 graph must not add AuraFlow model-shift patching')
+const latent = nodes.find(n => n.class_type === 'EmptyLatentImage')
+assert(Number(latent?.inputs?.width) === 1152 && Number(latent?.inputs?.height) === 768, 'Configured Anima dimensions must override the game request')
 
 const positive = nodes.find(n => n.class_type === 'CLIPTextEncode' && String(n.inputs?.text ?? '').includes('elena_trigger'))
 assert(positive, 'Character trigger prompt must be present in the positive prompt')
@@ -136,6 +139,7 @@ const explicitOverrideGraph = buildComfyPrompt(
     sampler: 'euler_ancestral',
     scheduler: 'normal',
     checkpoint: 'benchmark-model.safetensors',
+    dimensions: '1024 x 1024 (1:1)',
     allowAnimaTuningOverrides: true,
   },
   undefined,
@@ -149,6 +153,8 @@ assert(Number(explicitSampler?.inputs?.cfg) === 1.1, 'Explicit Anima benchmark o
 assert(explicitSampler?.inputs?.sampler_name === 'euler_ancestral', 'Explicit Anima benchmark override must apply sampler')
 assert(explicitSampler?.inputs?.scheduler === 'normal', 'Explicit Anima benchmark override must apply scheduler')
 assert(explicitUnet?.inputs?.unet_name === 'benchmark-model.safetensors', 'Explicit Anima benchmark override must apply checkpoint')
+const explicitLatent = explicitOverrideNodes.find(n => n.class_type === 'EmptyLatentImage')
+assert(Number(explicitLatent?.inputs?.width) === 1024 && Number(explicitLatent?.inputs?.height) === 1024, 'Explicit Anima benchmark override must apply dimensions')
 
 const hashA = resolvePromptHash({
   talentName: 'elena__scene-tavern',
@@ -161,6 +167,7 @@ fs.writeFileSync(configPath, JSON.stringify({
   animaModel: 'anima-base-v1.0.safetensors',
   animaTextEncoder: 'qwen_3_06b_base.safetensors',
   animaVae: 'qwen_image_vae.safetensors',
+  animaDimensions: '1152 x 768 (1.5:1)',
   lora: '',
   characterProfiles: {
     elena: {
