@@ -49,6 +49,7 @@ export interface GenerateBody {
   sampler?: string
   scheduler?: string
   disableComplexScenePolicy?: boolean
+  allowAnimaTuningOverrides?: boolean
   width?: number
   height?: number
   dimensions?: string
@@ -89,12 +90,16 @@ function readAsDataUrl(cache: CacheStore, entry: CacheEntry): string | null {
 }
 
 function renderSignature(config: Config, body: GenerateBody): string {
-  const modelIdentity = body.checkpoint ?? (config.imagePreset === 'anima' ? config.animaModel : config.checkpoint)
-  const steps = body.steps ?? config.steps
-  const cfg = body.cfg ?? config.cfg
-  const speedLoraStrength = body.loraStrength ?? config.loraStrength
-  const sampler = body.sampler ?? config.sampler
-  const scheduler = body.scheduler ?? config.scheduler
+  const allowAnimaTuningOverrides = config.imagePreset === 'anima' && body.allowAnimaTuningOverrides === true
+  const useRequestTuning = config.imagePreset !== 'anima' || allowAnimaTuningOverrides
+  const modelIdentity = useRequestTuning
+    ? (body.checkpoint ?? (config.imagePreset === 'anima' ? config.animaModel : config.checkpoint))
+    : config.animaModel
+  const steps = useRequestTuning ? (body.steps ?? config.steps) : config.steps
+  const cfg = useRequestTuning ? (body.cfg ?? config.cfg) : config.cfg
+  const speedLoraStrength = useRequestTuning ? (body.loraStrength ?? config.loraStrength) : config.loraStrength
+  const sampler = useRequestTuning ? (body.sampler ?? config.sampler) : config.sampler
+  const scheduler = useRequestTuning ? (body.scheduler ?? config.scheduler) : config.scheduler
   const disableComplexScenePolicy = body.disableComplexScenePolicy === true
   const talentName = body.talentName ?? body.talentId ?? ''
   const characterName = extractCharacterName(talentName, config.characterDirs)
@@ -136,6 +141,7 @@ function renderSignature(config: Config, body: GenerateBody): string {
     `scenePromptHints:${scenePromptHints}`,
     `sceneNegativePromptHints:${sceneNegativePromptHints}`,
     `complexScenePolicy:${disableComplexScenePolicy ? 'disabled' : JSON.stringify(config.complexScenePolicy)}`,
+    `allowAnimaTuningOverrides:${allowAnimaTuningOverrides}`,
   ].join('|')
 }
 
@@ -287,6 +293,7 @@ export function registerImageRoutes(router: Router, deps: ImageRouteDeps): void 
         sampler: body.sampler,
         scheduler: body.scheduler,
         disableComplexScenePolicy: body.disableComplexScenePolicy,
+        allowAnimaTuningOverrides: body.allowAnimaTuningOverrides,
         dimensions: resolveDimensions(body),
       },
       bulk,
