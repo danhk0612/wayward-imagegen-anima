@@ -1,0 +1,11 @@
+# Local machine configuration
+wayward-imagegen.config.json
+
+# Generated/local runtime data
+images/
+.state/
+state/
+
+# Logs and temporary files
+*.log
+*.tmp
