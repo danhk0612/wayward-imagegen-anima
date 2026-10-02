@@ -64,7 +64,25 @@
     }
   },
 
-  "_prompt_note": "Final positive prompt = global prefix + triggerPrompt + basePrompt + character prefix + Wayward scene prompt + character suffix + global suffix.",
+  "_scene_hint_note": "Optional Wayward scene slug -> extra relationship/layout hints. Useful for multi-person poses without changing solo scenes.",
+  "scenePromptHints": {
+    "cunnilingus": "1girl, 1boy, two distinct people, woman lying on her back, man positioned between her legs, clear body separation, coherent two-person pose",
+    "blowjob": "1girl, 1boy, two distinct people, woman kneeling in front of the man, clear body separation, coherent two-person pose",
+    "handjob": "1girl, 1boy, POV interaction, man mostly outside the frame, woman's hands clearly visible, coherent anatomy",
+    "patron_handjob": "1girl, 1boy, two distinct people, man seated on a chair, woman kneeling in front of him, clear body separation",
+    "titfuck": "1girl, 1boy, POV interaction, man mostly outside the frame, woman centered in front, clear body separation, coherent anatomy",
+    "sex": "1girl, 1boy, two distinct adult people, clear body separation, coherent two-person pose, correct limb count"
+  },
+  "sceneNegativePromptHints": {
+    "cunnilingus": "merged bodies, fused bodies, conjoined bodies, extra torso, extra person, duplicate person, disconnected limbs",
+    "blowjob": "merged bodies, fused bodies, conjoined bodies, extra torso, extra person, duplicate person, disconnected limbs",
+    "handjob": "merged bodies, fused bodies, extra torso, extra person, duplicate person, extra arms, disconnected limbs",
+    "patron_handjob": "merged bodies, fused bodies, conjoined bodies, extra torso, extra person, duplicate person, disconnected limbs",
+    "titfuck": "merged bodies, fused bodies, extra torso, extra person, duplicate person, extra arms, disconnected limbs",
+    "sex": "merged bodies, fused bodies, conjoined bodies, extra torso, extra person, duplicate person, malformed limbs, disconnected limbs"
+  },
+
+  "_prompt_note": "Final positive prompt = global prefix + triggerPrompt + basePrompt + character prefix + scene hint + Wayward scene prompt + character suffix + global suffix.",
   "positivePromptPrefix": "masterpiece, best quality",
   "positivePromptSuffix": "",
   "negativePromptPrefix": "worst quality, low quality, score_1, score_2, score_3, bad anatomy, bad hands, text, watermark, signature",
