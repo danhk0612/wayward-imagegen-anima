@@ -69,6 +69,35 @@ function extractSceneSlug(talentName?: string): string | null {
   return match?.[1]?.trim().toLowerCase() || null
 }
 
+const OTHER_PERSON_MARKERS = [
+  '1boy', '2boys', '3boys', 'multiple boys', 'faceless male',
+  'looking at another', 'with a man', 'with another person',
+]
+
+const COMPLEX_INTERACTION_MARKERS = [
+  'sex', 'vaginal', 'anal', 'cunnilingus', 'fellatio', 'blowjob',
+  'handjob', 'paizuri', 'titfuck', 'breast press', 'doggystyle',
+  'from behind', 'kneeling', 'straddling', 'spread legs', 'on chair',
+  'kissing', 'hugging', 'embrace', 'grabbing', 'touching',
+]
+
+function hasPromptMarker(prompt: string, marker: string): boolean {
+  const text = prompt.toLowerCase().replace(/_/g, ' ')
+  const escaped = marker.replace(/[.*+?^${}()|[\]\\]/g, '\\function extractSceneSlug(talentName?: string): string | null {
+  if (!talentName) return null
+  const match = talentName.match(/__scene-(.+?)__outfit-/i)
+  return match?.[1]?.trim().toLowerCase() || null
+}
+')
+  return new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`, 'i').test(text)
+}
+
+export function isComplexInteractionScene(prompt: string): boolean {
+  const hasOtherPerson = OTHER_PERSON_MARKERS.some(marker => hasPromptMarker(prompt, marker))
+  if (!hasOtherPerson) return false
+  return COMPLEX_INTERACTION_MARKERS.some(marker => hasPromptMarker(prompt, marker))
+}
+
 export function buildComfyPrompt(
   cfg: Config,
   textPrompt: string,
@@ -212,8 +241,13 @@ export function buildAnimaPrompt(
   ].map(part => part.trim()).filter(Boolean).join(', ')
   const scenePrompt = stripGamePromptPrefix(textPrompt, profile?.gamePromptPrefixToStrip)
   const sceneSlug = extractSceneSlug(talentName)
-  const sceneHint = sceneSlug ? config.scenePromptHints[sceneSlug] ?? '' : ''
-  const sceneNegativeHint = sceneSlug ? config.sceneNegativePromptHints[sceneSlug] ?? '' : ''
+  const isComplexInteraction = config.complexScenePolicy.enabled && isComplexInteractionScene(scenePrompt)
+  const genericSceneHint = isComplexInteraction ? config.complexScenePolicy.positivePrompt : ''
+  const genericSceneNegativeHint = isComplexInteraction ? config.complexScenePolicy.negativePrompt : ''
+  const specificSceneHint = sceneSlug ? config.scenePromptHints[sceneSlug] ?? '' : ''
+  const specificSceneNegativeHint = sceneSlug ? config.sceneNegativePromptHints[sceneSlug] ?? '' : ''
+  const sceneHint = [genericSceneHint, specificSceneHint].map(s => s.trim()).filter(Boolean).join(', ')
+  const sceneNegativeHint = [genericSceneNegativeHint, specificSceneNegativeHint].map(s => s.trim()).filter(Boolean).join(', ')
   const finalTextPrompt = composePrompt(
     composePrompt(config.positivePromptPrefix, characterPrefix, sceneHint),
     scenePrompt,
@@ -224,7 +258,7 @@ export function buildAnimaPrompt(
     negativePrompt,
     composeNegativePrompt('', profile?.negativePromptSuffix ?? '', config.negativePromptSuffix),
   )
-  const activeCharacterLoras = [...config.characterLoras, ...(profile?.loras ?? [])]
+  const profileLoraScale = isComplexInteraction ? config.complexScenePolicy.characterLoraScale : 1
 
   const nodes: ComfyGraph = {
     '3000': {
@@ -291,12 +325,12 @@ export function buildAnimaPrompt(
     modelOutput = [id, 0]
   }
 
-  for (const spec of activeCharacterLoras) {
+  const applyAnimaLora = (spec: LoraSpec, scale = 1): void => {
     const id = allocNodeId()
     nodes[id] = {
       inputs: {
         lora_name: spec.name,
-        strength_model: spec.strengthModel,
+        strength_model: spec.strengthModel * scale,
         model: modelOutput,
       },
       class_type: 'LoraLoaderModelOnly',
@@ -304,6 +338,9 @@ export function buildAnimaPrompt(
     }
     modelOutput = [id, 0]
   }
+
+  for (const spec of config.characterLoras) applyAnimaLora(spec)
+  for (const spec of profile?.loras ?? []) applyAnimaLora(spec, profileLoraScale)
 
   nodes['3006'] = {
     inputs: {
@@ -362,8 +399,13 @@ function buildSdxlLikePrompt(
   ].map(part => part.trim()).filter(Boolean).join(', ')
   const scenePrompt = stripGamePromptPrefix(textPrompt, profile?.gamePromptPrefixToStrip)
   const sceneSlug = extractSceneSlug(talentName)
-  const sceneHint = sceneSlug ? config.scenePromptHints[sceneSlug] ?? '' : ''
-  const sceneNegativeHint = sceneSlug ? config.sceneNegativePromptHints[sceneSlug] ?? '' : ''
+  const isComplexInteraction = config.complexScenePolicy.enabled && isComplexInteractionScene(scenePrompt)
+  const genericSceneHint = isComplexInteraction ? config.complexScenePolicy.positivePrompt : ''
+  const genericSceneNegativeHint = isComplexInteraction ? config.complexScenePolicy.negativePrompt : ''
+  const specificSceneHint = sceneSlug ? config.scenePromptHints[sceneSlug] ?? '' : ''
+  const specificSceneNegativeHint = sceneSlug ? config.sceneNegativePromptHints[sceneSlug] ?? '' : ''
+  const sceneHint = [genericSceneHint, specificSceneHint].map(s => s.trim()).filter(Boolean).join(', ')
+  const sceneNegativeHint = [genericSceneNegativeHint, specificSceneNegativeHint].map(s => s.trim()).filter(Boolean).join(', ')
   const finalTextPrompt = composePrompt(
     composePrompt(config.positivePromptPrefix, characterPrefix, sceneHint),
     scenePrompt,
@@ -374,7 +416,7 @@ function buildSdxlLikePrompt(
     negativePrompt,
     composeNegativePrompt('', profile?.negativePromptSuffix ?? '', config.negativePromptSuffix),
   )
-  const activeCharacterLoras = [...config.characterLoras, ...(profile?.loras ?? [])]
+  const profileLoraScale = isComplexInteraction ? config.complexScenePolicy.characterLoraScale : 1
 
   const nodes: ComfyGraph = {
     '1407': {
@@ -436,8 +478,13 @@ function buildSdxlLikePrompt(
     clipOutput = [id, 1]
   }
 
-  for (const spec of activeCharacterLoras) {
-    applyCharacterLora(spec)
+  for (const spec of config.characterLoras) applyCharacterLora(spec)
+  for (const spec of profile?.loras ?? []) {
+    applyCharacterLora({
+      ...spec,
+      strengthModel: spec.strengthModel * profileLoraScale,
+      strengthClip: spec.strengthClip * profileLoraScale,
+    })
   }
 
   nodes['15'] = {
