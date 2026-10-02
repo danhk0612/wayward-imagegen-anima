@@ -43,6 +43,13 @@ export interface CharacterProfile {
   negativePromptSuffix: string
 }
 
+export interface ComplexScenePolicy {
+  enabled: boolean
+  characterLoraScale: number
+  positivePrompt: string
+  negativePrompt: string
+}
+
 export interface Config {
   host: string
   port: number
@@ -71,7 +78,10 @@ export interface Config {
   /** Per-character LoRAs and trigger/base prompt fragments, keyed by character folder name. */
   characterProfiles: Record<string, CharacterProfile>
 
-  /** Optional scene-specific positive/negative hints keyed by Wayward scene slug. */
+  /** Generic prompt-driven handling for multi-person/contact scenes. */
+  complexScenePolicy: ComplexScenePolicy
+
+  /** Optional scene-specific exceptions keyed by Wayward scene slug. */
   scenePromptHints: Record<string, string>
   sceneNegativePromptHints: Record<string, string>
 
@@ -192,6 +202,26 @@ function parseStringMap(value: unknown): Record<string, string> {
   return result
 }
 
+function normalizeComplexScenePolicy(value: unknown): ComplexScenePolicy {
+  const defaults: ComplexScenePolicy = {
+    enabled: false,
+    characterLoraScale: 0.85,
+    positivePrompt: 'two distinct people, clear body separation, coherent anatomy, correct limb count',
+    negativePrompt: 'merged bodies, fused bodies, conjoined bodies, duplicate body, duplicate person, extra torso, extra arms, extra legs, disconnected limbs, malformed limbs',
+  }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return defaults
+  const typed = value as Record<string, unknown>
+  const rawScale = typeof typed.characterLoraScale === 'number' && Number.isFinite(typed.characterLoraScale)
+    ? typed.characterLoraScale
+    : defaults.characterLoraScale
+  return {
+    enabled: typeof typed.enabled === 'boolean' ? typed.enabled : defaults.enabled,
+    characterLoraScale: Math.max(0, Math.min(2, rawScale)),
+    positivePrompt: typeof typed.positivePrompt === 'string' ? typed.positivePrompt : defaults.positivePrompt,
+    negativePrompt: typeof typed.negativePrompt === 'string' ? typed.negativePrompt : defaults.negativePrompt,
+  }
+}
+
 function parseCharacterProfiles(value: unknown): Record<string, CharacterProfile> {
   let decoded = value
   if (typeof value === 'string') {
@@ -307,6 +337,10 @@ export function resolveConfig(argv: string[] = [], cwd = process.cwd()): Config 
     ?? file.characterProfiles,
   )
 
+  const complexScenePolicy = normalizeComplexScenePolicy(
+    file.complexScenePolicy,
+  )
+
   const scenePromptHints = parseStringMap(
     flags['scene-prompt-hints']
     ?? process.env.WAYWARD_SCENE_PROMPT_HINTS
@@ -336,6 +370,7 @@ export function resolveConfig(argv: string[] = [], cwd = process.cwd()): Config 
     negativePromptSuffix: pick('negative-suffix', 'WAYWARD_NEGATIVE_SUFFIX', 'negativePromptSuffix', ''),
     characterLoras,
     characterProfiles,
+    complexScenePolicy,
     scenePromptHints,
     sceneNegativePromptHints,
 
