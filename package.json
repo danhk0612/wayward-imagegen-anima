@@ -1,7 +1,7 @@
 {
-  "name": "wayward-imagegen",
-  "version": "0.1.0",
-  "description": "Local image-generation backend for Wayward with native Anima character LoRA profiles.",
+  "name": "wayward-anima-imagegen",
+  "version": "0.2.0",
+  "description": "Lightweight local Anima image-generation backend and setup UI for Wayward.",
   "type": "module",
   "license": "MIT",
   "bin": {
