@@ -137,10 +137,11 @@ else {
   Write-Host "No config installed. The first-run browser wizard will create one."
 }
 
+$imagesRoot = Join-Path $TargetRoot "images"
+
 if ($ResetCharacterArt) {
   Write-Step "Reset only the production character art"
   
-  $imagesRoot = Join-Path $TargetRoot "images"
   New-Item -ItemType Directory -Path $imagesRoot -Force | Out-Null
   
   $characterDir = Join-Path $imagesRoot ("illustrious\characters\" + $Character)
