@@ -409,6 +409,67 @@ export function registerSetupRoutes(router: Router, config: Config, cache: Cache
     })
   })
 
+  router.post('/api/setup/validate', async ctx => {
+    requireLocal(ctx)
+    const body = await readJson<{ settings?: unknown }>(ctx.req, SETUP_BODY_LIMIT)
+    const settings = normalizeSettings(body.settings)
+    const comfy = new ComfyClient(settings.comfyUrl)
+    const [stats, info] = await Promise.all([comfy.systemStats(), comfy.objectInfo()])
+
+    const errors: string[] = []
+    const warnings: string[] = []
+    if (!stats || !info) {
+      sendJson(ctx.res, 200, {
+        ok: false,
+        errors: ['ComfyUI에 연결할 수 없거나 object_info를 읽을 수 없습니다.'],
+        warnings,
+      })
+      return
+    }
+
+    const requireChoice = (label: string, choices: string[] | null, wanted: string): void => {
+      if (!choices) {
+        errors.push(`${label} 목록을 ComfyUI에서 읽을 수 없습니다.`)
+        return
+      }
+      if (!choices.includes(wanted)) errors.push(`${label}을 찾을 수 없습니다: ${wanted}`)
+    }
+
+    requireChoice('Anima diffusion model', inputChoices(info.UNETLoader, 'unet_name'), settings.animaModel)
+    requireChoice('Text encoder', inputChoices(info.CLIPLoader, 'clip_name'), settings.animaTextEncoder)
+    requireChoice('VAE', inputChoices(info.VAELoader, 'vae_name'), settings.animaVae)
+    requireChoice('Sampler', inputChoices(info.KSampler, 'sampler_name'), settings.sampler)
+    requireChoice('Scheduler', inputChoices(info.KSampler, 'scheduler'), settings.scheduler)
+
+    const loraChoices = inputChoices(info.LoraLoaderModelOnly, 'lora_name')
+      ?? inputChoices(info.LoraLoader, 'lora_name')
+    for (const [characterId, profile] of Object.entries(settings.characterProfiles)) {
+      if (profile.loras.length === 0) {
+        warnings.push(`${characterId}: 캐릭터 LoRA가 설정되지 않았습니다.`)
+      }
+      for (const lora of profile.loras) {
+        if (!loraChoices?.includes(lora.name)) {
+          errors.push(`${characterId}: LoRA를 찾을 수 없습니다: ${lora.name}`)
+        }
+      }
+      if (!profile.triggerPrompt.trim()) warnings.push(`${characterId}: Trigger Prompt가 비어 있습니다.`)
+      if (!profile.basePrompt.trim()) warnings.push(`${characterId}: 기본 캐릭터 Prompt가 비어 있습니다.`)
+    }
+
+    if (Object.keys(settings.characterProfiles).length === 0) {
+      errors.push('연결된 캐릭터가 없습니다.')
+    }
+
+    sendJson(ctx.res, 200, {
+      ok: errors.length === 0,
+      errors,
+      warnings,
+      system: {
+        comfyVersion: (stats.system as Record<string, unknown> | undefined)?.comfyui_version ?? null,
+      },
+    })
+  })
+
   router.get('/api/setup/wayward', ctx => {
     requireLocal(ctx)
     const gameRoot = resolveWaywardRoot(config)
