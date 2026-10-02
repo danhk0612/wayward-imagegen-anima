@@ -159,7 +159,7 @@ function fillSelect(el, values, selected){
 }
 function escId(v){return String(v).toLowerCase().trim().replace(/[^a-z0-9_-]+/g,'-').replace(/^-+|-+$/g,'').slice(0,64);}
 function profileTemplate(id,p={}){
-  const box=document.createElement('div');box.className='profile';box.dataset.id=id;
+  const box=document.createElement('div');box.className='profile config-profile';box.dataset.id=id;
   box.innerHTML=`
     <div class="profile-title"><strong>캐릭터</strong><input class="pid" value=""><button class="danger remove">연결 삭제</button></div>
     <div class="hint">예: elena, mara, pippa. 게임의 talentName 앞부분과 일치해야 합니다.</div>
@@ -213,17 +213,27 @@ async function loadWayward(){
     $('waywardStatus').className='status ok';
     for(const [id,info] of Object.entries(b.characters||{})){
       if(id==='patron')continue;
-      const box=document.createElement('div');box.className='profile';
+      const box=document.createElement('div');box.className='profile pack-profile';
       const active=(info.activeManifests||[]).length;
       const disabled=(info.disabledManifests||[]).length;
       box.innerHTML=`
         <div class="profile-title"><strong>${id}</strong><span class="hint">${info.configured?'AI 프로필 설정됨':'AI 프로필 미설정'}</span></div>
         <div class="status" style="margin-top:8px">정적 manifest: ${active}개 활성 / ${disabled}개 비활성\n게임 루트 정적 이미지: ${info.staticImagesPresent?'있음':'없음'}\nAI 생성 캐시: ${info.generatedCount||0}개</div>
         <div class="inline" style="margin-top:8px">
+          <button class="configureProfile">AI 프로필 편집/추가</button>
           <button class="disablePack">AI만 사용 — 정적 팩 비활성화</button>
           <button class="restorePack">정적 팩 복원</button>
           <button class="deleteGenerated danger">AI 생성 이미지 삭제</button>
         </div>`;
+      box.querySelector('.configureProfile').onclick=()=>{
+        let existing=[...document.querySelectorAll('.config-profile')].find(p=>escId(p.querySelector('.pid')?.value||'')===id);
+        if(!existing){
+          existing=profileTemplate(id);
+          $('profiles').append(existing);
+        }
+        existing.scrollIntoView({behavior:'smooth',block:'center'});
+        existing.querySelector('.pid').focus();
+      };
       box.querySelector('.disablePack').onclick=async()=>{
         if(!confirm(`${id}의 정적 이미지팩을 비활성화할까요?\n삭제하지 않고 백업 폴더로 이동합니다.`))return;
         await api('/api/setup/static-pack',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({characterId:id,mode:'disable'})});
@@ -245,7 +255,7 @@ async function loadWayward(){
 
 function readProfiles(){
   const out={};
-  for(const box of document.querySelectorAll('.profile')){
+  for(const box of document.querySelectorAll('.config-profile')){
     const id=escId(box.querySelector('.pid').value);
     if(!id)continue;
     const loras=[...box.querySelectorAll('.lora-row')].map(row=>({
