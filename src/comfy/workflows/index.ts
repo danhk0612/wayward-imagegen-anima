@@ -18,14 +18,8 @@ export interface GenOverrides {
   dimensions?: string
 }
 
-/** Node-graph shape as ComfyUI's API expects it. */
 export type ComfyGraph = Record<string, object>
 
-/**
- * z-image is fully pinned rather than configurable: it is a second backend
- * kept around for comparison, and nothing in the shipped game selects it.
- * Promote fields to `Config` if that changes.
- */
 const Z_IMAGE = {
   unet: 'zit\\moodyPornMix_zitV6.safetensors',
   clip: 'qwen_3_4b.safetensors',
@@ -38,7 +32,6 @@ const Z_IMAGE = {
   defaultDimensions: '1024 x 1024 (1:1)',
 } as const
 
-/** IP-Adapter FaceID settings. Dormant unless a reference image is supplied. */
 const FACE_ID = {
   preset: 'FACEID',
   loraStrength: 0.4,
@@ -60,7 +53,6 @@ function composeNegativePrompt(prefix: string, prompt: string, suffix: string): 
   return [prefix, prompt, suffix].map(s => s.trim()).filter(Boolean).join(', ')
 }
 
-/** Dispatch to the workflow-specific builder. */
 export function buildComfyPrompt(
   cfg: Config,
   textPrompt: string,
@@ -81,10 +73,6 @@ export function buildComfyPrompt(
   return buildZImagePrompt(textPrompt, filenamePrefix, seed, overrides)
 }
 
-/**
- * z-image workflow. Note the negative prompt is deliberately unused — this
- * workflow zeroes the negative conditioning (node 42) instead of encoding it.
- */
 export function buildZImagePrompt(
   textPrompt: string,
   filenamePrefix: string,
@@ -160,12 +148,6 @@ export function buildZImagePrompt(
   }
 }
 
-/**
- * The shipped Illustrious path.
- *
- * This now supports full character/style LoRAs as well, so a custom setup can
- * keep using the same route while changing only config.
- */
 export function buildIllustriousPrompt(
   config: Config,
   textPrompt: string,
@@ -180,11 +162,10 @@ export function buildIllustriousPrompt(
 }
 
 /**
- * Anima preset.
+ * Native Anima Base v1 path.
  *
- * In practice this is a generic checkpoint+LoRA SDXL-like graph. The important
- * differences are driven by config: checkpoint, prompt affixes, character LoRA
- * list, and the optional speed LoRA.
+ * Anima is loaded as separate diffusion model, Qwen text encoder and VAE.
+ * Character/style LoRAs patch the diffusion model with LoraLoaderModelOnly.
  */
 export function buildAnimaPrompt(
   config: Config,
@@ -196,7 +177,144 @@ export function buildAnimaPrompt(
   referenceImagePath?: string,
   talentName?: string,
 ): ComfyGraph {
-  return buildSdxlLikePrompt('Anima', config, textPrompt, negativePrompt, filenamePrefix, seed, overrides, referenceImagePath, talentName)
+  if (referenceImagePath) {
+    throw new Error('reference-image FaceID is not supported by the native Anima preset yet')
+  }
+
+  const actualSeed = seed ?? randomSeed()
+  const steps = overrides?.steps ?? config.steps
+  const cfg = overrides?.cfg ?? config.cfg
+  const modelName = overrides?.checkpoint?.trim() || config.animaModel
+  const { width, height } = parseDimensions(overrides?.dimensions)
+
+  const characterName = talentName ? extractCharacterName(talentName, config.characterDirs) : null
+  const profile: CharacterProfile | undefined = characterName ? config.characterProfiles[characterName] : undefined
+  const characterPrefix = [
+    profile?.triggerPrompt ?? '',
+    profile?.basePrompt ?? '',
+    profile?.positivePromptPrefix ?? '',
+  ].map(part => part.trim()).filter(Boolean).join(', ')
+  const finalTextPrompt = composePrompt(
+    composePrompt(config.positivePromptPrefix, characterPrefix, ''),
+    textPrompt,
+    composePrompt('', profile?.positivePromptSuffix ?? '', config.positivePromptSuffix),
+  )
+  const finalNegativePrompt = composeNegativePrompt(
+    composeNegativePrompt(config.negativePromptPrefix, profile?.negativePromptPrefix ?? '', ''),
+    negativePrompt,
+    composeNegativePrompt('', profile?.negativePromptSuffix ?? '', config.negativePromptSuffix),
+  )
+  const activeCharacterLoras = [...config.characterLoras, ...(profile?.loras ?? [])]
+
+  const nodes: ComfyGraph = {
+    '3000': {
+      inputs: { unet_name: modelName, weight_dtype: 'default' },
+      class_type: 'UNETLoader',
+      _meta: { title: 'Load Anima Diffusion Model' },
+    },
+    '3001': {
+      inputs: {
+        clip_name: config.animaTextEncoder,
+        type: 'stable_diffusion',
+        device: 'default',
+      },
+      class_type: 'CLIPLoader',
+      _meta: { title: 'Load Anima Text Encoder' },
+    },
+    '3002': {
+      inputs: { vae_name: config.animaVae },
+      class_type: 'VAELoader',
+      _meta: { title: 'Load Anima VAE' },
+    },
+    '3003': {
+      inputs: { text: finalTextPrompt, clip: ['3001', 0] },
+      class_type: 'CLIPTextEncode',
+      _meta: { title: 'Anima Positive Prompt' },
+    },
+    '3004': {
+      inputs: { text: finalNegativePrompt, clip: ['3001', 0] },
+      class_type: 'CLIPTextEncode',
+      _meta: { title: 'Anima Negative Prompt' },
+    },
+    '3005': {
+      inputs: { width, height, batch_size: 1 },
+      class_type: 'EmptyLatentImage',
+      _meta: { title: 'Empty Latent Image' },
+    },
+    '3007': {
+      inputs: { samples: ['3006', 0], vae: ['3002', 0] },
+      class_type: 'VAEDecode',
+      _meta: { title: 'VAE Decode' },
+    },
+    '3008': {
+      inputs: { filename_prefix: filenamePrefix, images: ['3007', 0] },
+      class_type: 'SaveImage',
+      _meta: { title: 'Save Image' },
+    },
+  }
+
+  let nextNodeId = 3100
+  const allocNodeId = (): string => String(nextNodeId++)
+  let modelOutput: [string, number] = ['3000', 0]
+
+  if (config.lora) {
+    const id = allocNodeId()
+    nodes[id] = {
+      inputs: {
+        lora_name: config.lora,
+        strength_model: overrides?.loraStrength ?? config.loraStrength ?? 1,
+        model: modelOutput,
+      },
+      class_type: 'LoraLoaderModelOnly',
+      _meta: { title: `Anima Speed LoRA: ${config.lora}` },
+    }
+    modelOutput = [id, 0]
+  }
+
+  for (const spec of activeCharacterLoras) {
+    const id = allocNodeId()
+    nodes[id] = {
+      inputs: {
+        lora_name: spec.name,
+        strength_model: spec.strengthModel,
+        model: modelOutput,
+      },
+      class_type: 'LoraLoaderModelOnly',
+      _meta: { title: `Anima Character/Style LoRA: ${spec.name}` },
+    }
+    modelOutput = [id, 0]
+  }
+
+  nodes['3006'] = {
+    inputs: {
+      seed: actualSeed,
+      steps,
+      cfg,
+      sampler_name: config.sampler,
+      scheduler: config.scheduler,
+      denoise: 1,
+      model: modelOutput,
+      positive: ['3003', 0],
+      negative: ['3004', 0],
+      latent_image: ['3005', 0],
+    },
+    class_type: 'KSampler',
+    _meta: { title: 'Anima KSampler' },
+  }
+
+  return nodes
+}
+
+function parseDimensions(value?: string): { width: number; height: number } {
+  if (!value) return { width: 1024, height: 1024 }
+  const match = value.match(/(\d+)\s*x\s*(\d+)/i)
+  if (!match) return { width: 1024, height: 1024 }
+  const width = Number(match[1])
+  const height = Number(match[2])
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width < 64 || height < 64) {
+    return { width: 1024, height: 1024 }
+  }
+  return { width, height }
 }
 
 function buildSdxlLikePrompt(
@@ -211,15 +329,19 @@ function buildSdxlLikePrompt(
   talentName?: string,
 ): ComfyGraph {
   const actualSeed = seed ?? randomSeed()
-
   const steps = overrides?.steps ?? config.steps
   const cfg = overrides?.cfg ?? config.cfg
   const speedLoraStrength = overrides?.loraStrength ?? config.loraStrength ?? 1
   const checkpoint = overrides?.checkpoint?.trim() || config.checkpoint
   const characterName = talentName ? extractCharacterName(talentName, config.characterDirs) : null
   const profile: CharacterProfile | undefined = characterName ? config.characterProfiles[characterName] : undefined
+  const characterPrefix = [
+    profile?.triggerPrompt ?? '',
+    profile?.basePrompt ?? '',
+    profile?.positivePromptPrefix ?? '',
+  ].map(part => part.trim()).filter(Boolean).join(', ')
   const finalTextPrompt = composePrompt(
-    composePrompt(config.positivePromptPrefix, profile?.positivePromptPrefix ?? '', ''),
+    composePrompt(config.positivePromptPrefix, characterPrefix, ''),
     textPrompt,
     composePrompt('', profile?.positivePromptSuffix ?? '', config.positivePromptSuffix),
   )
@@ -349,7 +471,6 @@ function buildSdxlLikePrompt(
     modelOutput = [faceIdId, 0]
   }
 
-  // Optional speed LoRA. An empty `lora` disables it.
   if (config.lora) {
     const speedLoraId = allocNodeId()
     nodes[speedLoraId] = {
@@ -394,12 +515,6 @@ function buildSdxlLikePrompt(
   return nodes
 }
 
-/**
- * Wan i2v video. Unlike the image workflows this patches a user-supplied
- * workflow JSON rather than building a graph from scratch, because the node
- * ids are whatever the player's exported workflow used. We only rewrite the
- * inputs we own; everything else is left exactly as they saved it.
- */
 export function buildWanVideoPrompt(
   workflowJson: string,
   textPrompt: string,
