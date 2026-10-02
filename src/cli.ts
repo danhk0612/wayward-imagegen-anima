@@ -39,6 +39,8 @@ Usage: wayward-imagegen [options]
   --anima-text-encoder <file>
                           Anima text encoder (default qwen_3_06b_base.safetensors)
   --anima-vae <file>      Anima VAE (default qwen_image_vae.safetensors)
+  --anima-dimensions <txt> Optional fixed native Anima size, e.g. "1152 x 768";
+                          empty means use Wayward's requested dimensions
   --lora <file>           Optional speed LoRA ('' to disable)
   --lora-strength <n>     Speed LoRA weight
   --character-loras <json>
@@ -115,6 +117,7 @@ async function main(): Promise<void> {
   console.log(`  comfyui     ${config.comfyUrl}`)
   console.log(`  images      ${config.imagesDir}  (${handle.cache.size} cached)`)
   console.log(`  review UI   http://${shown}:${handle.port}/`)
+  console.log(`  setup UI    http://${shown}:${handle.port}/setup.html`)
   if (config.webp && !await webpAvailable()) {
     console.log(
       `  note        install "sharp" to store WebP instead of PNG`
