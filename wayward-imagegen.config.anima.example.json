@@ -66,7 +66,7 @@
 
   "_complex_scene_note": "Generic prompt-driven policy for difficult multi-person/contact poses. It does not depend on individual scene names. characterLoraScale applies only to the selected character profile LoRA(s), not global/style LoRAs.",
   "complexScenePolicy": {
-    "enabled": true,
+    "enabled": false,
     "characterLoraScale": 0.85,
     "positivePrompt": "two distinct people, clear body separation, coherent anatomy, correct limb count, clear interaction",
     "negativePrompt": "merged bodies, fused bodies, conjoined bodies, duplicate body, duplicate person, extra torso, extra arms, extra legs, disconnected limbs, malformed limbs"
@@ -82,8 +82,8 @@
   "negativePromptPrefix": "worst quality, low quality, score_1, score_2, score_3, bad anatomy, bad hands, text, watermark, signature",
   "negativePromptSuffix": "",
 
-  "steps": 30,
-  "cfg": 4,
+  "steps": 36,
+  "cfg": 4.5,
   "sampler": "er_sde",
   "scheduler": "simple",
 
