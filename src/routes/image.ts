@@ -100,6 +100,12 @@ function renderSignature(config: Config, body: GenerateBody): string {
   const speedLoraStrength = useRequestTuning ? (body.loraStrength ?? config.loraStrength) : config.loraStrength
   const sampler = useRequestTuning ? (body.sampler ?? config.sampler) : config.sampler
   const scheduler = useRequestTuning ? (body.scheduler ?? config.scheduler) : config.scheduler
+  const requestedDimensions = resolveDimensions(body)
+  const animaDimensions = config.imagePreset === 'anima'
+    ? (allowAnimaTuningOverrides
+      ? (requestedDimensions ?? config.animaDimensions)
+      : (config.animaDimensions || requestedDimensions || ''))
+    : ''
   const disableComplexScenePolicy = body.disableComplexScenePolicy === true
   const talentName = body.talentName ?? body.talentId ?? ''
   const characterName = extractCharacterName(talentName, config.characterDirs)
@@ -123,6 +129,7 @@ function renderSignature(config: Config, body: GenerateBody): string {
     `model:${modelIdentity}`,
     `animaTextEncoder:${config.imagePreset === 'anima' ? config.animaTextEncoder : ''}`,
     `animaVae:${config.imagePreset === 'anima' ? config.animaVae : ''}`,
+    `animaDimensions:${animaDimensions}`,
     `steps:${steps}`,
     `cfg:${cfg}`,
     `clipSkip:${config.imagePreset === 'illustrious' ? config.clipSkip : ''}`,
