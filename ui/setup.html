@@ -269,7 +269,7 @@ function collect(){
     positivePromptSuffix:$('positiveSuffix').value,
     negativePromptPrefix:$('negativePrefix').value,
     negativePromptSuffix:$('negativeSuffix').value,
-    characterDirs:[...new Set([...(settings.characterDirs||[]).filter(x=>x==='patron'),...Object.keys(profiles)])],
+    characterDirs:[...new Set([...(settings.characterDirs||[]),...Object.keys(profiles)])],
     characterProfiles:profiles
   };
 }
@@ -313,7 +313,10 @@ async function probe(){
     fillSelect($('vae'),options.vaes,$('vae').value||settings.animaVae);
     fillSelect($('sampler'),options.samplers,$('sampler').value||settings.sampler);
     fillSelect($('scheduler'),options.schedulers,$('scheduler').value||settings.scheduler);
-    renderProfiles();
+    for(const sel of document.querySelectorAll('.lname')){
+      const current=sel.value;
+      fillSelect(sel,options.loras,current);
+    }
   }catch(e){$('probeStatus').textContent='연결 실패: '+e.message;$('probeStatus').className='status err';}
 }
 $('probe').onclick=probe;
