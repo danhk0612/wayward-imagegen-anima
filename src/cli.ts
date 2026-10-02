@@ -33,13 +33,19 @@ Usage: wayward-imagegen [options]
   --comfy-url <url>       ComfyUI base URL (default http://127.0.0.1:8188)
   --wan-workflow <path>   Wan i2v workflow JSON, to enable video
 
-  --checkpoint <file>     Checkpoint to render with
+  --checkpoint <file>     Illustrious checkpoint (or per-request model override)
   --image-preset <name>   Image preset: illustrious | anima
+  --anima-model <file>    Anima diffusion model (default anima-base-v1.0.safetensors)
+  --anima-text-encoder <file>
+                          Anima text encoder (default qwen_3_06b_base.safetensors)
+  --anima-vae <file>      Anima VAE (default qwen_image_vae.safetensors)
   --lora <file>           Optional speed LoRA ('' to disable)
   --lora-strength <n>     Speed LoRA weight
   --character-loras <json>
-                          JSON array of character/style LoRAs, e.g.
-                          [{"name":"hero.safetensors","strengthModel":0.9,"strengthClip":0.9}]
+                          JSON array of global character/style LoRAs.
+  --character-profiles <json>
+                          JSON object keyed by Wayward character name. Usually
+                          easier to keep this in the config file.
   --positive-prefix <txt> --positive-suffix <txt>
   --negative-prefix <txt> --negative-suffix <txt>
   --steps <n>  --cfg <n>  Sampler settings
@@ -65,7 +71,6 @@ Settings may also come from the environment (COMFYUI_URL, COMFYUI_CHECKPOINT,
 WAYWARD_PORT, ...). Flags win, then environment, then the config file.
 `
 
-/** Missing this many ms of heartbeat means the parent is gone. */
 const HEARTBEAT_TIMEOUT_MS = 8000
 
 async function main(): Promise<void> {
@@ -143,26 +148,6 @@ async function main(): Promise<void> {
   process.on('SIGINT', () => shutdown('SIGINT'))
   process.on('SIGTERM', () => shutdown('SIGTERM'))
 
-  // Orphan guard.
-  //
-  // A parent that is force-killed, or a terminal window simply closed, gives
-  // this process no signal it can catch — so without this it keeps the port and
-  // keeps driving the GPU behind a window that looks shut. This project has
-  // been bitten by orphaned background GPU work before; the guard removes the
-  // class rather than relying on a handler that cannot always run.
-  //
-  // Three checks, because on Windows no single one is sufficient:
-  //  - stdin closing. Reliable when the parent spawns nothing else; NOT when it
-  //    does, because another child can inherit the pipe's write handle and hold
-  //    it open (Vite's esbuild helpers do exactly this).
-  //  - a missing heartbeat, for parents that send one.
-  //  - polling the parent pid, which can miss because a terminated process
-  //    keeps a valid handle while anything still references it.
-  //
-  // Together they cover a parent that exits, is killed, or stops responding.
-  // A force-kill of a parent that also spawned other processes can still slip
-  // through; `bun run dev` handles that case by attaching to the leftover
-  // rather than starting a second server.
   if (config.parentPid !== null) {
     const parent = config.parentPid
     let lastBeat = Date.now()
@@ -178,9 +163,6 @@ async function main(): Promise<void> {
         return
       }
       try {
-        // Signal 0 checks existence without delivering anything. On Windows
-        // this can miss — a terminated process keeps a valid handle while
-        // something still references it — so it is a backstop, never the only check.
         process.kill(parent, 0)
       } catch {
         shutdown(`parent ${parent} is gone`)
