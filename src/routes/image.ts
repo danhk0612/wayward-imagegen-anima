@@ -20,10 +20,6 @@ import { mimeFor } from '../http/static.ts'
 
 const WORKFLOWS: readonly WorkflowType[] = ['illustrious', 'z-image']
 
-/**
- * ComfyUI's dimension presets are matched by exact string, so these cannot be
- * generated from the numbers.
- */
 const KNOWN_DIMS: Record<string, string> = {
   '512x512': '512 x 512 (1:1)',
   '768x512': '768 x 512 (1.5:1)',
@@ -62,16 +58,9 @@ export interface ImageRouteDeps {
   config: Config
   cache: CacheStore
   jobs: JobRunner
-  /** Append a line to the cache-miss log. Injected so tests need no disk. */
   logMiss?: (line: Record<string, unknown>) => void
 }
 
-/**
- * The URL the client loads a render from, relative to the server root.
- *
- * Each segment is encoded separately so a filename containing a space or a
- * `#` survives, without turning the path separators into `%2F`.
- */
 export function imageUrlFor(relativePath: string): string {
   return `/images/${relativePath.split('/').map(encodeURIComponent).join('/')}`
 }
@@ -96,15 +85,8 @@ function readAsDataUrl(cache: CacheStore, entry: CacheEntry): string | null {
   }
 }
 
-/**
- * The identity of a render.
- *
- * The client normally sends its own `promptHash` so both sides agree. When it
- * does not, generation params are folded in — two requests with the same text
- * but different steps/cfg are different pictures and must not share a cell.
- */
 function renderSignature(config: Config, body: GenerateBody): string {
-  const checkpoint = body.checkpoint ?? config.checkpoint
+  const modelIdentity = body.checkpoint ?? (config.imagePreset === 'anima' ? config.animaModel : config.checkpoint)
   const steps = body.steps ?? config.steps
   const cfg = body.cfg ?? config.cfg
   const speedLoraStrength = body.loraStrength ?? config.loraStrength
@@ -112,20 +94,26 @@ function renderSignature(config: Config, body: GenerateBody): string {
   const characterName = extractCharacterName(talentName, config.characterDirs)
   const profile = characterName ? config.characterProfiles[characterName] : undefined
   const characterLoras = [...config.characterLoras, ...(profile?.loras ?? [])]
-    .map(l => `${l.name}:${l.strengthModel}:${l.strengthClip}`)
+    .map(l => config.imagePreset === 'anima'
+      ? `${l.name}:${l.strengthModel}`
+      : `${l.name}:${l.strengthModel}:${l.strengthClip}`)
     .join(',')
 
   return [
     `preset:${config.imagePreset}`,
-    `ckpt:${checkpoint}`,
+    `model:${modelIdentity}`,
+    `animaTextEncoder:${config.imagePreset === 'anima' ? config.animaTextEncoder : ''}`,
+    `animaVae:${config.imagePreset === 'anima' ? config.animaVae : ''}`,
     `steps:${steps}`,
     `cfg:${cfg}`,
-    `clipSkip:${config.clipSkip}`,
+    `clipSkip:${config.imagePreset === 'illustrious' ? config.clipSkip : ''}`,
     `sampler:${config.sampler}`,
     `scheduler:${config.scheduler}`,
     `speedLora:${config.lora}:${speedLoraStrength}`,
     `character:${characterName ?? 'unknown'}`,
     `characterLoras:${characterLoras}`,
+    `trigger:${profile?.triggerPrompt ?? ''}`,
+    `basePrompt:${profile?.basePrompt ?? ''}`,
     `ppp:${config.positivePromptPrefix}|${profile?.positivePromptPrefix ?? ''}`,
     `pps:${profile?.positivePromptSuffix ?? ''}|${config.positivePromptSuffix}`,
     `npp:${config.negativePromptPrefix}|${profile?.negativePromptPrefix ?? ''}`,
@@ -194,10 +182,6 @@ export function registerImageRoutes(router: Router, deps: ImageRouteDeps): void 
     const bypassCache = body.bypassCache === true
     const inline = ctx.query.get('inline') === '1'
 
-    // The refresh button: the player said this image is bad. Drop EVERY entry
-    // for this talentName, not just the matching hash — prompts drift between
-    // sessions, so one state routinely has several hashes, and leaving the
-    // others alive means the bad image reappears on the next remount.
     if (bypassCache) {
       let dropped = 0
       for (const [key, entry] of Object.entries(cache.entries)) {
@@ -221,8 +205,6 @@ export function registerImageRoutes(router: Router, deps: ImageRouteDeps): void 
         cached: true,
         imagePath: cached.imagePath,
         imageUrl: imageUrlFor(cached.imagePath),
-        // Reported so a caller does not have to fetch the bytes just to size
-        // them — the bulk runner tallies this per image.
         bytes: sizeOf(cache, cached),
       }
       if (inline) {
@@ -233,10 +215,6 @@ export function registerImageRoutes(router: Router, deps: ImageRouteDeps): void 
       return
     }
 
-    // Only genuine runtime misses are logged: not batch work, not an explicit
-    // regen. That keeps the log answering one question — the game asked for
-    // something new, was it a truly new state or the same state under a drifted
-    // prompt? See `gin images cache-audit`.
     if (!bulk && !bypassCache && deps.logMiss) {
       let priorVariants = 0
       for (const [k, e] of Object.entries(cache.entries)) {
@@ -256,12 +234,6 @@ export function registerImageRoutes(router: Router, deps: ImageRouteDeps): void 
       })
     }
 
-    // Bound the damage a runaway or hostile caller can do.
-    //
-    // The rate ceilings apply to INTERACTIVE work only. Batch work is the
-    // operator's own overnight run — it has its own queue and paces itself, and
-    // throttling it at a few hundred an hour would quietly stall the
-    // pre-generation this server exists to do.
     if (!bulk) {
       if (jobs.queuedCount() >= config.maxQueued) {
         throw new HttpError(429, `too many queued requests (${config.maxQueued})`)
@@ -270,8 +242,7 @@ export function registerImageRoutes(router: Router, deps: ImageRouteDeps): void 
         throw new HttpError(429, `hourly image limit reached (${config.maxImagesPerHour})`)
       }
     }
-    // The disk ceiling DOES apply to everything: filling the drive is just as
-    // bad whoever asked for it.
+
     if (config.maxDiskGb > 0) {
       const usedGb = cache.diskUsageBytes() / 1024 ** 3
       if (usedGb >= config.maxDiskGb) {
@@ -305,14 +276,9 @@ export function registerImageRoutes(router: Router, deps: ImageRouteDeps): void 
   router.get('/api/image/status/:promptId', ctx => {
     const { promptId } = ctx.params
     const job = jobs.get(promptId)
-    if (!job) {
-      // A completed job is reaped after its TTL. 404 is honest: we no longer
-      // know. The client falls back to the catalogue, which by then has it.
-      throw new HttpError(404, 'unknown promptId')
-    }
+    if (!job) throw new HttpError(404, 'unknown promptId')
     const inline = ctx.query.get('inline') === '1'
     const body = jobResponse(job, config.imagesDir, inline)
-    // 202 while pending keeps a polling client from treating "not yet" as done.
     sendJson(ctx.res, job.status === 'queued' || job.status === 'processing' ? 202 : 200, body)
   })
 
@@ -348,8 +314,6 @@ export function registerImageRoutes(router: Router, deps: ImageRouteDeps): void 
     sendJson(ctx.res, 200, response)
   })
 
-  // Deleting art is off unless the operator asks for it. Nothing in the game
-  // needs it; it exists for the review UI, on a machine whose owner opted in.
   router.delete('/api/image/delete', ctx => {
     if (!config.allowDelete) {
       throw new HttpError(403, 'deletion is disabled; start with --allow-delete to enable it')
@@ -368,9 +332,6 @@ export function registerImageRoutes(router: Router, deps: ImageRouteDeps): void 
       if (full && fs.existsSync(full)) {
         try { fs.unlinkSync(full) } catch { /* the entry still goes */ }
       }
-      // Removing the entry as well as the file — the dev server deleted files
-      // but left the index pointing at them, which produced phantom entries
-      // that every later consumer had to filter out.
       cache.remove(key)
       deleted++
     }
@@ -378,7 +339,6 @@ export function registerImageRoutes(router: Router, deps: ImageRouteDeps): void 
   })
 }
 
-/** Exposed for the health route's queue summary. */
 export function describeJobs(jobs: JobRunner): Record<string, unknown> {
   const active = jobs.activeJobs()
   return {
