@@ -1,0 +1,38 @@
+# Wayward Anima ImageGen roadmap
+
+## 0.2.0 browser-setup milestone
+
+Completed:
+
+- Native Anima renderer with per-character model-only LoRAs.
+- Server-side protection from Wayward's legacy Illustrious steps/CFG/model overrides.
+- Optional server-forced Anima resolution; empty means use Wayward's requested size.
+- Browser setup wizard at `/setup.html`.
+- Live ComfyUI discovery for diffusion models, text encoders, VAEs, LoRAs, samplers and schedulers.
+- Character profile add/edit/remove with multiple LoRAs, trigger prompt, base prompt and prompt affixes.
+- Live setup validation against ComfyUI.
+- End-to-end test render with browser preview.
+- Wayward root detection and per-character static image-pack disable/restore.
+- Per-character generated-art deletion without touching game saves.
+- Batch pause/resume/clear controls.
+- Safe backend-owned ComfyUI cancellation and graceful backend shutdown.
+- Portable one-click PowerShell launcher with first-run setup flow.
+- MIT/NOTICE documentation with third-party model assets excluded.
+- Minimal Lite ZIP build script and CI packaging smoke test.
+
+## Before 0.2.0 release
+
+- Test the setup wizard against a clean Wayward folder on Windows.
+- Verify first-run flow: launcher -> setup -> save -> automatic backend restart -> game.
+- Verify a character with no static image pack generates on demand and via pre-generation.
+- Verify disable/restore of a downloaded image pack is reversible with real pack files.
+- Verify cancel/shutdown while a batch image is running.
+- Check Korean UI text and error messages on Windows PowerShell 5.1.
+
+## Optional later work
+
+- Standalone portable executable build so Bun does not need to be installed.
+- More advanced global/style LoRA controls.
+- Optional complex-scene policy UI.
+- Model/package download helpers only if licensing and maintenance cost remain acceptable.
+- Additional renderer backends such as Forge as separate adapters.
