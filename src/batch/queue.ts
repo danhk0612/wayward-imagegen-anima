@@ -53,16 +53,10 @@ export interface BatchStatus {
   errored: number
   currentKey: string | null
   startedAt: number | null
-  /** Seconds remaining, from the observed rate. Null until enough has finished. */
   etaSeconds: number | null
   lastError: string | null
 }
 
-/**
- * Consecutive failures that mean something is broken rather than one bad item —
- * ComfyUI gone, out of disk, a wrong checkpoint name. Stopping beats burning
- * hours failing thousands of times.
- */
 const CIRCUIT_BREAK_AFTER = 10
 
 export class BatchQueue {
@@ -90,7 +84,6 @@ export class BatchQueue {
   private workFile(id: string): string { return path.join(this.dir, `${id}.jsonl`) }
   private resultFile(id: string): string { return path.join(this.dir, `${id}.results.jsonl`) }
 
-  /** Pick up an unfinished job left by a previous run. */
   resume(): this {
     let names: string[]
     try {
@@ -112,8 +105,6 @@ export class BatchQueue {
       const left = this.items.length - this.results.size
       if (left > 0) {
         console.log(`[batch] resuming ${latest}: ${left} of ${this.items.length} left`)
-        // Paused on resume: an overnight run that restarts on its own after a
-        // crash is a surprise. The operator restarts it.
         this.paused = true
       }
     } catch (err) {
@@ -130,7 +121,7 @@ export class BatchQueue {
         const parsed = JSON.parse(line) as ResultLine
         this.results.set(parsed.talentId, parsed)
       }
-    } catch { /* no results yet */ }
+    } catch { }
   }
 
   private recordResult(line: ResultLine): void {
@@ -144,13 +135,6 @@ export class BatchQueue {
     }
   }
 
-  /**
-   * Accept a list of work.
-   *
-   * Anything already rendered is dropped here rather than queued and skipped
-   * later, so the reported total is the work that will actually happen — an
-   * honest number to show a progress bar against.
-   */
   enqueue(items: BatchItem[], jobId?: string): { accepted: number; alreadyCached: number; jobId: string } {
     const fresh: BatchItem[] = []
     let alreadyCached = 0
@@ -158,7 +142,17 @@ export class BatchQueue {
     for (const item of items) {
       const workflow = item.workflow ?? 'illustrious'
       const imageType = item.imageType ?? 'portrait'
-      const promptHash = derivePromptHash(item.prompt, item.negativePrompt ?? '', item)
+      const promptHash = resolvePromptHash({
+        talentName: item.talentId,
+        prompt: item.prompt,
+        negativePrompt: item.negativePrompt ?? '',
+        steps: item.steps,
+        cfg: item.cfg,
+        loraStrength: item.loraStrength,
+        checkpoint: item.checkpoint,
+        width: item.width,
+        height: item.height,
+      }, this.config)
       if (this.cache.get(item.talentId, imageType, promptHash, workflow)) {
         alreadyCached++
         continue
@@ -166,8 +160,6 @@ export class BatchQueue {
       fresh.push(item)
     }
 
-    // Highest demand first: an overnight run rarely finishes the whole space,
-    // so what it does get through should be what play actually asks for.
     fresh.sort((a, b) => (b.weight ?? 0) - (a.weight ?? 0))
 
     const id = jobId ?? new Date(this.now()).toISOString().replace(/[:.]/g, '-')
@@ -181,7 +173,6 @@ export class BatchQueue {
     try {
       fs.mkdirSync(this.dir, { recursive: true })
       fs.writeFileSync(this.workFile(id), fresh.map(i => JSON.stringify(i)).join('\n') + '\n')
-      // A stale results file from a reused id would make everything look done.
       fs.rmSync(this.resultFile(id), { force: true })
     } catch (err) {
       console.error('[batch] could not persist the queue:', (err as Error).message)
@@ -209,7 +200,7 @@ export class BatchQueue {
       try {
         fs.rmSync(this.workFile(this.jobId), { force: true })
         fs.rmSync(this.resultFile(this.jobId), { force: true })
-      } catch { /* best effort */ }
+      } catch { }
     }
     this.jobId = null
   }
@@ -222,7 +213,6 @@ export class BatchQueue {
     const done = outcomes.length
 
     let etaSeconds: number | null = null
-    // Needs a few finished items before the rate means anything.
     if (this.running && this.startedAt !== null && done >= 3 && done < this.items.length) {
       const elapsed = (this.now() - this.startedAt) / 1000
       etaSeconds = Math.round((elapsed / done) * (this.items.length - done))
@@ -263,8 +253,6 @@ export class BatchQueue {
           this.recordResult({ talentId: item.talentId, outcome: 'error', at: this.now(), error: message })
           this.consecutiveFailures++
           if (this.consecutiveFailures >= CIRCUIT_BREAK_AFTER) {
-            // Something is broken, not just this item. Stopping beats spending
-            // the night failing thousands of times.
             this.paused = true
             this.lastError = `stopped after ${CIRCUIT_BREAK_AFTER} failures in a row: ${message}`
             console.error(`[batch] ${this.lastError}`)
@@ -281,7 +269,17 @@ export class BatchQueue {
   private async renderOne(item: BatchItem): Promise<ItemOutcome> {
     const workflow = item.workflow ?? 'illustrious'
     const imageType = item.imageType ?? 'portrait'
-    const promptHash = derivePromptHash(item.prompt, item.negativePrompt ?? '', item)
+    const promptHash = resolvePromptHash({
+      talentName: item.talentId,
+      prompt: item.prompt,
+      negativePrompt: item.negativePrompt ?? '',
+      steps: item.steps,
+      cfg: item.cfg,
+      loraStrength: item.loraStrength,
+      checkpoint: item.checkpoint,
+      width: item.width,
+      height: item.height,
+    }, this.config)
 
     if (this.cache.get(item.talentId, imageType, promptHash, workflow)) return 'cached'
 
@@ -298,25 +296,21 @@ export class BatchQueue {
         cfg: item.cfg,
         loraStrength: item.loraStrength,
         checkpoint: item.checkpoint,
+        dimensions: resolveDimensions(item),
       },
-      // Always bulk: this must not cancel — or be cancelled by — whatever the
-      // player is looking at, and it must not trip the interactive rate caps.
       bulk: true,
     })
 
-    // Wait for the poller to finish it. A render takes tens of seconds, so this
-    // is deliberately unhurried.
     const deadline = this.now() + 15 * 60_000
     while (this.now() < deadline) {
       if (this.stopRequested) throw new Error('cancelled')
       const current = this.jobs.get(job.promptId)
-      if (!current) break  // reaped after completing
+      if (!current) break
       if (current.status === 'completed') return 'completed'
       if (current.status === 'error') throw new Error(current.error ?? 'render failed')
       await new Promise(r => setTimeout(r, 500))
     }
 
-    // The job may have completed and been reaped while we waited.
     if (this.cache.get(item.talentId, imageType, promptHash, workflow)) return 'completed'
     throw new Error('timed out waiting for the render')
   }
