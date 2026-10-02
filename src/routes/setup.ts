@@ -26,6 +26,7 @@ export interface SetupSettings {
   animaModel: string
   animaTextEncoder: string
   animaVae: string
+  animaDimensions: string
   steps: number
   cfg: number
   sampler: string
@@ -173,12 +174,18 @@ function normalizeSettings(value: unknown): SetupSettings {
     throw new HttpError(400, 'comfyUrl must use http or https')
   }
 
+  const animaDimensions = promptField(typed.animaDimensions, 'animaDimensions').trim()
+  if (animaDimensions && !/^\d+\s*x\s*\d+(?:\s*\([^)]*\))?$/i.test(animaDimensions)) {
+    throw new HttpError(400, 'animaDimensions must look like "1216 x 832" or be empty')
+  }
+
   return {
     comfyUrl,
     imagePreset: 'anima',
     animaModel: stringValue(typed.animaModel, 'animaModel').trim(),
     animaTextEncoder: stringValue(typed.animaTextEncoder, 'animaTextEncoder').trim(),
     animaVae: stringValue(typed.animaVae, 'animaVae').trim(),
+    animaDimensions,
     steps: numberValue(typed.steps, 'steps', 1, 150, true),
     cfg: numberValue(typed.cfg, 'cfg', 0, 30),
     sampler: stringValue(typed.sampler, 'sampler').trim(),
@@ -200,6 +207,7 @@ function currentSettings(config: Config): SetupSettings {
     animaModel: config.animaModel,
     animaTextEncoder: config.animaTextEncoder,
     animaVae: config.animaVae,
+    animaDimensions: config.animaDimensions,
     steps: firstAnimaSetup ? 30 : config.steps,
     cfg: firstAnimaSetup ? 4.5 : config.cfg,
     sampler: firstAnimaSetup ? 'er_sde' : config.sampler,
