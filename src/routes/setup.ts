@@ -333,48 +333,64 @@ function movePath(source: string, destination: string): void {
   fs.renameSync(source, destination)
 }
 
+function executeMoves(pairs: Array<{ source: string; destination: string }>): void {
+  for (const pair of pairs) {
+    if (fs.existsSync(pair.destination)) {
+      throw new HttpError(409, `destination already exists: ${pair.destination}`)
+    }
+  }
+  for (const pair of pairs) movePath(pair.source, pair.destination)
+}
+
 function disableStaticPack(gameRoot: string, characterId: string): { moved: string[] } {
   const disabledRoot = path.join(gameRoot, '_disabled-imagepacks', characterId)
-  fs.mkdirSync(disabledRoot, { recursive: true })
-  const moved: string[] = []
+  const pairs: Array<{ source: string; destination: string }> = []
 
   for (const name of activePackManifests(gameRoot, characterId)) {
-    const source = path.join(gameRoot, name)
-    const destination = path.join(disabledRoot, name)
-    movePath(source, destination)
-    moved.push(name)
+    pairs.push({
+      source: path.join(gameRoot, name),
+      destination: path.join(disabledRoot, name),
+    })
   }
 
   const staticDir = path.join(gameRoot, 'images', 'illustrious', 'characters', characterId)
   if (fs.existsSync(staticDir)) {
-    const destination = path.join(disabledRoot, 'images', 'illustrious', 'characters', characterId)
-    movePath(staticDir, destination)
-    moved.push(path.relative(gameRoot, staticDir).replace(/\\/g, '/'))
+    pairs.push({
+      source: staticDir,
+      destination: path.join(disabledRoot, 'images', 'illustrious', 'characters', characterId),
+    })
   }
 
-  return { moved }
+  executeMoves(pairs)
+  return {
+    moved: pairs.map(pair => path.relative(gameRoot, pair.source).replace(/\\/g, '/')),
+  }
 }
 
 function restoreStaticPack(gameRoot: string, characterId: string): { restored: string[] } {
   const disabledRoot = path.join(gameRoot, '_disabled-imagepacks', characterId)
-  const restored: string[] = []
+  const pairs: Array<{ source: string; destination: string }> = []
 
   for (const name of disabledPackManifests(gameRoot, characterId)) {
-    const source = path.join(disabledRoot, name)
-    const destination = path.join(gameRoot, name)
-    movePath(source, destination)
-    restored.push(name)
+    pairs.push({
+      source: path.join(disabledRoot, name),
+      destination: path.join(gameRoot, name),
+    })
   }
 
   const disabledImages = path.join(disabledRoot, 'images', 'illustrious', 'characters', characterId)
   if (fs.existsSync(disabledImages)) {
-    const destination = path.join(gameRoot, 'images', 'illustrious', 'characters', characterId)
-    movePath(disabledImages, destination)
-    restored.push(path.relative(gameRoot, destination).replace(/\\/g, '/'))
+    pairs.push({
+      source: disabledImages,
+      destination: path.join(gameRoot, 'images', 'illustrious', 'characters', characterId),
+    })
   }
 
+  executeMoves(pairs)
   try { fs.rmSync(disabledRoot, { recursive: true, force: false }) } catch { /* keep non-empty backups */ }
-  return { restored }
+  return {
+    restored: pairs.map(pair => path.relative(gameRoot, pair.destination).replace(/\\/g, '/')),
+  }
 }
 
 function deleteGeneratedCharacterArt(config: Config, cache: CacheStore, characterId: string): number {
