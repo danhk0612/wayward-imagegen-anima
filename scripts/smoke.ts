@@ -17,6 +17,10 @@ fs.writeFileSync(configPath, JSON.stringify({
   animaTextEncoder: 'qwen_3_06b_base.safetensors',
   animaVae: 'qwen_image_vae.safetensors',
   lora: '',
+  steps: 36,
+  cfg: 4.5,
+  sampler: 'er_sde',
+  scheduler: 'simple',
   characterProfiles: {
     elena: {
       loras: [{ name: 'elena.safetensors', strengthModel: 0.85 }],
@@ -92,6 +96,59 @@ assert(!String(simplePositive.inputs?.text ?? '').includes('two distinct people'
 const simpleLora = simpleNodes.find(n => n.class_type === 'LoraLoaderModelOnly' && n.inputs?.lora_name === 'elena.safetensors')
 assert(simpleLora, 'Simple scene must apply the character LoRA')
 assert(Math.abs(Number(simpleLora.inputs?.strength_model) - 0.85) < 1e-9, 'Simple scene must preserve normal character LoRA strength')
+
+const legacyOverrideGraph = buildComfyPrompt(
+  cfg,
+  'masterpiece, best quality, 1girl, old_elena, black hair, medium breasts, standing alone',
+  '',
+  'smoke_ignore_game_tuning',
+  'illustrious',
+  125,
+  {
+    steps: 7,
+    cfg: 1.1,
+    sampler: 'euler_ancestral',
+    scheduler: 'normal',
+    checkpoint: 'wrong-game-checkpoint.safetensors',
+  },
+  undefined,
+  'elena__scene-solo__outfit-casual',
+)
+const legacyOverrideNodes = Object.values(legacyOverrideGraph) as Array<{ class_type?: string; inputs?: Record<string, unknown> }>
+const legacySampler = legacyOverrideNodes.find(n => n.class_type === 'KSampler')
+const legacyUnet = legacyOverrideNodes.find(n => n.class_type === 'UNETLoader')
+assert(Number(legacySampler?.inputs?.steps) === 36, 'Native Anima must ignore game-provided steps by default')
+assert(Number(legacySampler?.inputs?.cfg) === 4.5, 'Native Anima must ignore game-provided CFG by default')
+assert(legacySampler?.inputs?.sampler_name === 'er_sde', 'Native Anima must ignore game-provided sampler by default')
+assert(legacySampler?.inputs?.scheduler === 'simple', 'Native Anima must ignore game-provided scheduler by default')
+assert(legacyUnet?.inputs?.unet_name === 'anima-base-v1.0.safetensors', 'Native Anima must ignore game-provided checkpoint by default')
+
+const explicitOverrideGraph = buildComfyPrompt(
+  cfg,
+  'masterpiece, best quality, 1girl, old_elena, black hair, medium breasts, standing alone',
+  '',
+  'smoke_allow_test_tuning',
+  'illustrious',
+  126,
+  {
+    steps: 7,
+    cfg: 1.1,
+    sampler: 'euler_ancestral',
+    scheduler: 'normal',
+    checkpoint: 'benchmark-model.safetensors',
+    allowAnimaTuningOverrides: true,
+  },
+  undefined,
+  'elena__scene-solo__outfit-casual',
+)
+const explicitOverrideNodes = Object.values(explicitOverrideGraph) as Array<{ class_type?: string; inputs?: Record<string, unknown> }>
+const explicitSampler = explicitOverrideNodes.find(n => n.class_type === 'KSampler')
+const explicitUnet = explicitOverrideNodes.find(n => n.class_type === 'UNETLoader')
+assert(Number(explicitSampler?.inputs?.steps) === 7, 'Explicit Anima benchmark override must apply steps')
+assert(Number(explicitSampler?.inputs?.cfg) === 1.1, 'Explicit Anima benchmark override must apply CFG')
+assert(explicitSampler?.inputs?.sampler_name === 'euler_ancestral', 'Explicit Anima benchmark override must apply sampler')
+assert(explicitSampler?.inputs?.scheduler === 'normal', 'Explicit Anima benchmark override must apply scheduler')
+assert(explicitUnet?.inputs?.unet_name === 'benchmark-model.safetensors', 'Explicit Anima benchmark override must apply checkpoint')
 
 const hashA = resolvePromptHash({
   talentName: 'elena__scene-tavern',
