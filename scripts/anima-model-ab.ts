@@ -221,6 +221,7 @@ for (let sceneIndex = 0; sceneIndex < selected.length; sceneIndex++) {
         width,
         height,
         disableComplexScenePolicy: true,
+        allowAnimaTuningOverrides: true,
         promptHash: `anima-model-ab-v1-${sceneIndex}-${modelLabel}-${seed}`,
       }
 
