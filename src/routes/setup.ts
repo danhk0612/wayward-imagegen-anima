@@ -246,8 +246,11 @@ function writeSettings(config: Config, settings: SetupSettings): { backupPath: s
     raw[key] = value
   }
 
-  // Native Anima should not inherit a global speed LoRA by accident.
-  if (!('lora' in raw)) raw.lora = ''
+  // The simplified Anima setup does not expose a global speed LoRA.
+  // Always clear a legacy Illustrious/turbo LoRA so converting an existing
+  // installation cannot silently apply an incompatible model patch.
+  raw.lora = ''
+  raw.loraStrength = 1
 
   const dir = path.dirname(file)
   fs.mkdirSync(dir, { recursive: true })
