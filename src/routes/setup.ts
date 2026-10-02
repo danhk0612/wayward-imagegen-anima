@@ -9,6 +9,7 @@
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import type { Config, CharacterProfile, LoraSpec } from '../config.ts'
+import type { CacheStore } from '../cache/cacheStore.ts'
 import { ComfyClient, inputChoices } from '../comfy/client.ts'
 import { Router, sendJson, HttpError, type RequestContext } from '../http/router.ts'
 import { readJson } from '../http/body.ts'
@@ -280,7 +281,109 @@ function setupOptionsFromInfo(info: Awaited<ReturnType<ComfyClient['objectInfo']
   }
 }
 
-export function registerSetupRoutes(router: Router, config: Config): void {
+
+function resolveWaywardRoot(config: Config): string | null {
+  const backendRoot = path.dirname(config.configFilePath)
+  const candidate = path.dirname(backendRoot)
+  return fs.existsSync(path.join(candidate, 'index.html')) ? candidate : null
+}
+
+function activePackManifests(gameRoot: string, characterId: string): string[] {
+  const prefix = `images-${characterId}-`
+  try {
+    return fs.readdirSync(gameRoot, { withFileTypes: true })
+      .filter(entry => entry.isFile() && entry.name.startsWith(prefix) && entry.name.endsWith('.js'))
+      .map(entry => entry.name)
+      .sort()
+  } catch {
+    return []
+  }
+}
+
+function disabledPackManifests(gameRoot: string, characterId: string): string[] {
+  const dir = path.join(gameRoot, '_disabled-imagepacks', characterId)
+  try {
+    return fs.readdirSync(dir, { withFileTypes: true })
+      .filter(entry => entry.isFile() && entry.name.endsWith('.js'))
+      .map(entry => entry.name)
+      .sort()
+  } catch {
+    return []
+  }
+}
+
+function generatedCount(cache: CacheStore, characterId: string): number {
+  const prefix = characterId + '__'
+  return Object.values(cache.entries).filter(entry => entry.talentName.toLowerCase().startsWith(prefix)).length
+}
+
+function movePath(source: string, destination: string): void {
+  fs.mkdirSync(path.dirname(destination), { recursive: true })
+  if (fs.existsSync(destination)) {
+    throw new HttpError(409, `destination already exists: ${destination}`)
+  }
+  fs.renameSync(source, destination)
+}
+
+function disableStaticPack(gameRoot: string, characterId: string): { moved: string[] } {
+  const disabledRoot = path.join(gameRoot, '_disabled-imagepacks', characterId)
+  fs.mkdirSync(disabledRoot, { recursive: true })
+  const moved: string[] = []
+
+  for (const name of activePackManifests(gameRoot, characterId)) {
+    const source = path.join(gameRoot, name)
+    const destination = path.join(disabledRoot, name)
+    movePath(source, destination)
+    moved.push(name)
+  }
+
+  const staticDir = path.join(gameRoot, 'images', 'illustrious', 'characters', characterId)
+  if (fs.existsSync(staticDir)) {
+    const destination = path.join(disabledRoot, 'images', 'illustrious', 'characters', characterId)
+    movePath(staticDir, destination)
+    moved.push(path.relative(gameRoot, staticDir).replace(/\\/g, '/'))
+  }
+
+  return { moved }
+}
+
+function restoreStaticPack(gameRoot: string, characterId: string): { restored: string[] } {
+  const disabledRoot = path.join(gameRoot, '_disabled-imagepacks', characterId)
+  const restored: string[] = []
+
+  for (const name of disabledPackManifests(gameRoot, characterId)) {
+    const source = path.join(disabledRoot, name)
+    const destination = path.join(gameRoot, name)
+    movePath(source, destination)
+    restored.push(name)
+  }
+
+  const disabledImages = path.join(disabledRoot, 'images', 'illustrious', 'characters', characterId)
+  if (fs.existsSync(disabledImages)) {
+    const destination = path.join(gameRoot, 'images', 'illustrious', 'characters', characterId)
+    movePath(disabledImages, destination)
+    restored.push(path.relative(gameRoot, destination).replace(/\\/g, '/'))
+  }
+
+  try { fs.rmSync(disabledRoot, { recursive: true, force: false }) } catch { /* keep non-empty backups */ }
+  return { restored }
+}
+
+function deleteGeneratedCharacterArt(config: Config, cache: CacheStore, characterId: string): number {
+  const prefix = characterId + '__'
+  let removed = 0
+  for (const [key, entry] of Object.entries(cache.entries)) {
+    if (!entry.talentName.toLowerCase().startsWith(prefix)) continue
+    cache.remove(key)
+    removed++
+  }
+
+  const characterDir = path.join(config.imagesDir, 'illustrious', 'characters', characterId)
+  fs.rmSync(characterDir, { recursive: true, force: true })
+  return removed
+}
+
+export function registerSetupRoutes(router: Router, config: Config, cache: CacheStore): void {
   router.get('/api/setup/settings', ctx => {
     requireLocal(ctx)
     sendJson(ctx.res, 200, {
@@ -304,6 +407,71 @@ export function registerSetupRoutes(router: Router, config: Config): void {
       restartRequired: true,
       settings,
     })
+  })
+
+  router.get('/api/setup/wayward', ctx => {
+    requireLocal(ctx)
+    const gameRoot = resolveWaywardRoot(config)
+    if (!gameRoot) {
+      sendJson(ctx.res, 200, { detected: false, gameRoot: null, characters: {} })
+      return
+    }
+
+    const ids = new Set<string>([
+      ...config.characterDirs,
+      ...Object.keys(config.characterProfiles),
+    ])
+    try {
+      for (const entry of fs.readdirSync(gameRoot, { withFileTypes: true })) {
+        const match = entry.isFile() ? entry.name.match(/^images-([a-z0-9_-]+)-\d+\.js$/i) : null
+        if (match) ids.add(match[1].toLowerCase())
+      }
+    } catch { /* optional discovery */ }
+
+    const characters: Record<string, unknown> = {}
+    for (const id of [...ids].sort()) {
+      const staticDir = path.join(gameRoot, 'images', 'illustrious', 'characters', id)
+      characters[id] = {
+        configured: !!config.characterProfiles[id],
+        activeManifests: activePackManifests(gameRoot, id),
+        disabledManifests: disabledPackManifests(gameRoot, id),
+        staticImagesPresent: fs.existsSync(staticDir),
+        generatedCount: generatedCount(cache, id),
+      }
+    }
+
+    sendJson(ctx.res, 200, {
+      detected: true,
+      gameRoot,
+      indexHtml: path.join(gameRoot, 'index.html'),
+      characters,
+    })
+  })
+
+  router.post('/api/setup/static-pack', async ctx => {
+    requireLocal(ctx)
+    const body = await readJson<{ characterId?: string; mode?: string }>(ctx.req, 64 * 1024)
+    const characterId = typeof body.characterId === 'string' ? body.characterId.trim().toLowerCase() : ''
+    if (!CHARACTER_ID.test(characterId)) throw new HttpError(400, 'invalid characterId')
+    if (body.mode !== 'disable' && body.mode !== 'restore') {
+      throw new HttpError(400, 'mode must be disable or restore')
+    }
+    const gameRoot = resolveWaywardRoot(config)
+    if (!gameRoot) throw new HttpError(404, 'Wayward game root could not be detected')
+
+    const result = body.mode === 'disable'
+      ? disableStaticPack(gameRoot, characterId)
+      : restoreStaticPack(gameRoot, characterId)
+    sendJson(ctx.res, 200, { ok: true, characterId, mode: body.mode, ...result })
+  })
+
+  router.post('/api/setup/generated-art/delete', async ctx => {
+    requireLocal(ctx)
+    const body = await readJson<{ characterId?: string }>(ctx.req, 64 * 1024)
+    const characterId = typeof body.characterId === 'string' ? body.characterId.trim().toLowerCase() : ''
+    if (!CHARACTER_ID.test(characterId)) throw new HttpError(400, 'invalid characterId')
+    const cacheEntriesRemoved = deleteGeneratedCharacterArt(config, cache, characterId)
+    sendJson(ctx.res, 200, { ok: true, characterId, cacheEntriesRemoved })
   })
 
   router.get('/api/setup/comfy-options', async ctx => {
