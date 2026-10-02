@@ -184,17 +184,19 @@ export function registerImageRoutes(router: Router, deps: ImageRouteDeps): void 
     const inline = ctx.query.get('inline') === '1'
 
     if (bypassCache) {
-      let dropped = 0
-      for (const [key, entry] of Object.entries(cache.entries)) {
-        if (entry.talentName !== talentName) continue
+      // Bypass only the exact cache identity being regenerated. Older behavior
+      // removed every variant for the same talentName, which made A/B testing
+      // and review regeneration destroy unrelated renders of that scene.
+      const key = jobKey(talentName, imageType, promptHash, workflow)
+      const entry = cache.entries[key]
+      if (entry) {
         const full = cache.absolutePathOf(entry)
         if (full && fs.existsSync(full)) {
           try { fs.unlinkSync(full) } catch { /* the entry still goes */ }
         }
         cache.remove(key)
-        dropped++
+        console.log(`[generate] bypass dropped exact cache entry for ${talentName}`)
       }
-      if (dropped > 0) console.log(`[generate] bypass dropped ${dropped} entr(y/ies) for ${talentName}`)
     }
 
     const cached = bypassCache ? null : cache.get(talentName, imageType, promptHash, workflow)
