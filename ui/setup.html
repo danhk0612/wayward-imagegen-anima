@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Wayward Anima 설정</title>
+<style>
+:root{color-scheme:dark;--bg:#101216;--panel:#181c22;--panel2:#202630;--line:#333b48;--text:#eef2f7;--muted:#9aa6b5;--accent:#7aa2f7;--good:#79c98b;--bad:#ef7f7f}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+header{display:flex;align-items:center;gap:14px;padding:14px 20px;border-bottom:1px solid var(--line);background:#14181e;position:sticky;top:0;z-index:2}
+h1{font-size:18px;margin:0}.grow{flex:1}a{color:var(--accent);text-decoration:none}button,input,select,textarea{font:inherit}
+button{border:1px solid var(--line);background:var(--panel2);color:var(--text);padding:8px 12px;border-radius:7px;cursor:pointer}
+button.primary{background:#315a9b;border-color:#4776bd}button.danger{background:#6f3030;border-color:#9a4b4b}
+button:disabled{opacity:.45;cursor:not-allowed}
+main{max-width:1050px;margin:0 auto;padding:22px}.steps{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px}
+.stepbtn.active{border-color:var(--accent);color:white}.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px;margin-bottom:16px}
+.card h2{margin:0 0 6px;font-size:17px}.hint{color:var(--muted);font-size:13px}.row{display:grid;grid-template-columns:190px 1fr;gap:12px;align-items:start;margin:12px 0}
+input,select,textarea{width:100%;background:#0f1318;color:var(--text);border:1px solid var(--line);border-radius:6px;padding:8px}
+textarea{min-height:80px;resize:vertical}.inline{display:flex;gap:8px;align-items:center}.inline>*{flex:1}.inline button{flex:0 0 auto}
+.status{padding:9px 11px;border-radius:7px;background:#11161c;border:1px solid var(--line);white-space:pre-wrap}.ok{color:var(--good)}.err{color:var(--bad)}
+.profile{border:1px solid var(--line);border-radius:9px;padding:14px;margin-top:12px;background:#14181e}.profile-title{display:flex;gap:8px;align-items:center}.profile-title strong{font-size:16px}
+.lora-row{display:grid;grid-template-columns:1fr 120px auto;gap:8px;margin:8px 0}.footer{display:flex;gap:8px;justify-content:flex-end;position:sticky;bottom:0;padding:14px 0;background:linear-gradient(transparent,var(--bg) 30%)}
+[hidden]{display:none!important}@media(max-width:700px){.row{grid-template-columns:1fr}.lora-row{grid-template-columns:1fr 90px auto}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Wayward Anima ImageGen</h1>
+  <span id="topStatus" class="hint">설정 불러오는 중…</span>
+  <span class="grow"></span>
+  <a href="/">이미지 검토</a>
+</header>
+<main>
+  <div class="steps">
+    <button class="stepbtn active" data-step="1">1. ComfyUI</button>
+    <button class="stepbtn" data-step="2">2. 캐릭터</button>
+    <button class="stepbtn" data-step="3">3. 생성 설정</button>
+    <button class="stepbtn" data-step="4">4. 확인/저장</button>
+  </div>
+
+  <section data-page="1">
+    <div class="card">
+      <h2>ComfyUI 연결</h2>
+      <div class="hint">ComfyUI를 먼저 실행한 뒤 연결을 확인하세요. 설치된 Anima 모델·텍스트 인코더·VAE·LoRA 목록을 자동으로 읽습니다.</div>
+      <div class="row"><label for="comfyUrl">ComfyUI 주소</label><div class="inline"><input id="comfyUrl" value="http://127.0.0.1:8188"><button id="probe">연결 확인</button></div></div>
+      <div id="probeStatus" class="status">아직 확인하지 않았습니다.</div>
+      <div class="row"><label for="animaModel">Anima diffusion model</label><select id="animaModel"></select></div>
+      <div class="row"><label for="textEncoder">Text encoder</label><select id="textEncoder"></select></div>
+      <div class="row"><label for="vae">VAE</label><select id="vae"></select></div>
+    </div>
+  </section>
+
+  <section data-page="2" hidden>
+    <div class="card">
+      <h2>캐릭터 연결</h2>
+      <div class="hint">Wayward의 캐릭터 ID와 Anima 캐릭터 LoRA를 연결합니다. 설정을 삭제해도 게임 저장 데이터는 변경하지 않습니다.</div>
+      <div id="profiles"></div>
+      <button id="addProfile">+ 캐릭터 추가</button>
+    </div>
+  </section>
+
+  <section data-page="3" hidden>
+    <div class="card">
+      <h2>기본 생성 설정</h2>
+      <div class="hint">게임이 보내는 기존 Illustrious 튜닝값은 native Anima에 적용하지 않습니다. 아래 서버 설정이 기준입니다.</div>
+      <div class="row"><label>품질 프리셋</label><select id="quality"><option value="fast">빠르게 (26 steps)</option><option value="balanced">균형 (30 steps)</option><option value="quality">고품질 (36 steps)</option><option value="custom">직접 설정</option></select></div>
+      <div class="row"><label for="steps">Steps</label><input id="steps" type="number" min="1" max="150"></div>
+      <div class="row"><label for="cfg">CFG</label><input id="cfg" type="number" min="0" max="30" step="0.1"></div>
+      <div class="row"><label for="sampler">Sampler</label><select id="sampler"></select></div>
+      <div class="row"><label for="scheduler">Scheduler</label><select id="scheduler"></select></div>
+    </div>
+    <div class="card">
+      <h2>전역 프롬프트</h2>
+      <div class="row"><label>Positive prefix</label><textarea id="positivePrefix"></textarea></div>
+      <div class="row"><label>Positive suffix</label><textarea id="positiveSuffix"></textarea></div>
+      <div class="row"><label>Negative prefix</label><textarea id="negativePrefix"></textarea></div>
+      <div class="row"><label>Negative suffix</label><textarea id="negativeSuffix"></textarea></div>
+    </div>
+  </section>
+
+  <section data-page="4" hidden>
+    <div class="card">
+      <h2>설정 확인</h2>
+      <div class="hint">저장하면 기존 JSON 설정은 자동 백업됩니다. 저장 후 backend를 재시작해야 변경 내용이 완전히 적용됩니다.</div>
+      <div id="summary" class="status"></div>
+    </div>
+    <div class="card">
+      <h2>작업 제어</h2>
+      <div id="batchStatus" class="status">불러오는 중…</div>
+      <div class="inline" style="margin-top:10px">
+        <button id="pauseBatch">미리 생성 일시정지</button>
+        <button id="resumeBatch">미리 생성 재개</button>
+        <button id="clearBatch" class="danger">대기열 비우기</button>
+      </div>
+    </div>
+  </section>
+
+  <div class="footer">
+    <button id="prev">이전</button>
+    <button id="next">다음</button>
+    <button id="save" class="primary" hidden>설정 저장</button>
+  </div>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+const api = async (url, init) => {
+  const res = await fetch(url, {credentials:'omit', ...init});
+  let body = {};
+  try { body = await res.json(); } catch {}
+  if (!res.ok) throw new Error(body.error || res.statusText);
+  return body;
+};
+let page=1, settings=null, options={loras:[],diffusionModels:[],textEncoders:[],vaes:[],samplers:[],schedulers:[]};
+
+function setPage(n){
+  page=Math.min(4,Math.max(1,n));
+  document.querySelectorAll('[data-page]').forEach(x=>x.hidden=Number(x.dataset.page)!==page);
+  document.querySelectorAll('.stepbtn').forEach(x=>x.classList.toggle('active',Number(x.dataset.step)===page));
+  $('prev').disabled=page===1;$('next').hidden=page===4;$('save').hidden=page!==4;
+  if(page===4){buildSummary();loadBatch();}
+}
+document.querySelectorAll('.stepbtn').forEach(b=>b.onclick=()=>setPage(Number(b.dataset.step)));
+$('prev').onclick=()=>setPage(page-1);$('next').onclick=()=>setPage(page+1);
+
+function fillSelect(el, values, selected){
+  const uniq=[...new Set([selected,...(values||[])].filter(Boolean))];
+  el.innerHTML='';
+  for(const v of uniq){const o=document.createElement('option');o.value=v;o.textContent=v;el.append(o);}
+  if(selected)el.value=selected;
+}
+function escId(v){return String(v).toLowerCase().trim().replace(/[^a-z0-9_-]+/g,'-').replace(/^-+|-+$/g,'').slice(0,64);}
+function profileTemplate(id,p={}){
+  const box=document.createElement('div');box.className='profile';box.dataset.id=id;
+  box.innerHTML=`
+    <div class="profile-title"><strong>캐릭터</strong><input class="pid" value=""><button class="danger remove">연결 삭제</button></div>
+    <div class="hint">예: elena, mara, pippa. 게임의 talentName 앞부분과 일치해야 합니다.</div>
+    <div class="loras"></div>
+    <button class="addLora">+ LoRA 추가</button>
+    <div class="row"><label>Trigger Prompt</label><input class="trigger"></div>
+    <div class="row"><label>기본 캐릭터 Prompt</label><textarea class="base"></textarea></div>
+    <div class="row"><label>게임 기본 Prompt 제거</label><textarea class="strip"></textarea></div>
+    <details><summary>고급 캐릭터 프롬프트</summary>
+      <div class="row"><label>Positive prefix</label><textarea class="ppre"></textarea></div>
+      <div class="row"><label>Positive suffix</label><textarea class="psuf"></textarea></div>
+      <div class="row"><label>Negative prefix</label><textarea class="npre"></textarea></div>
+      <div class="row"><label>Negative suffix</label><textarea class="nsuf"></textarea></div>
+    </details>`;
+  box.querySelector('.pid').value=id;
+  box.querySelector('.trigger').value=p.triggerPrompt||'';
+  box.querySelector('.base').value=p.basePrompt||'';
+  box.querySelector('.strip').value=p.gamePromptPrefixToStrip||'';
+  box.querySelector('.ppre').value=p.positivePromptPrefix||'';
+  box.querySelector('.psuf').value=p.positivePromptSuffix||'';
+  box.querySelector('.npre').value=p.negativePromptPrefix||'';
+  box.querySelector('.nsuf').value=p.negativePromptSuffix||'';
+  box.querySelector('.remove').onclick=()=>box.remove();
+  const addLora=(spec={name:'',strengthModel:.9})=>{
+    const row=document.createElement('div');row.className='lora-row';
+    const sel=document.createElement('select');sel.className='lname';fillSelect(sel,options.loras,spec.name||'');
+    const strength=document.createElement('input');strength.className='lstrength';strength.type='number';strength.step='.05';strength.min='-4';strength.max='4';strength.value=spec.strengthModel??.9;
+    const del=document.createElement('button');del.textContent='삭제';del.onclick=()=>row.remove();
+    row.append(sel,strength,del);box.querySelector('.loras').append(row);
+  };
+  (p.loras||[]).forEach(addLora); if(!(p.loras||[]).length)addLora();
+  box.querySelector('.addLora').onclick=()=>addLora();
+  return box;
+}
+function renderProfiles(){
+  $('profiles').innerHTML='';
+  for(const [id,p] of Object.entries(settings.characterProfiles||{}))$('profiles').append(profileTemplate(id,p));
+}
+$('addProfile').onclick=()=>$('profiles').append(profileTemplate(''));
+
+function readProfiles(){
+  const out={};
+  for(const box of document.querySelectorAll('.profile')){
+    const id=escId(box.querySelector('.pid').value);
+    if(!id)continue;
+    const loras=[...box.querySelectorAll('.lora-row')].map(row=>({
+      name:row.querySelector('.lname').value,
+      strengthModel:Number(row.querySelector('.lstrength').value),
+      strengthClip:Number(row.querySelector('.lstrength').value)
+    })).filter(x=>x.name);
+    out[id]={
+      loras,
+      triggerPrompt:box.querySelector('.trigger').value,
+      basePrompt:box.querySelector('.base').value,
+      gamePromptPrefixToStrip:box.querySelector('.strip').value,
+      positivePromptPrefix:box.querySelector('.ppre').value,
+      positivePromptSuffix:box.querySelector('.psuf').value,
+      negativePromptPrefix:box.querySelector('.npre').value,
+      negativePromptSuffix:box.querySelector('.nsuf').value
+    };
+  }
+  return out;
+}
+function collect(){
+  const profiles=readProfiles();
+  return {
+    comfyUrl:$('comfyUrl').value.trim(),
+    imagePreset:'anima',
+    animaModel:$('animaModel').value,
+    animaTextEncoder:$('textEncoder').value,
+    animaVae:$('vae').value,
+    steps:Number($('steps').value),
+    cfg:Number($('cfg').value),
+    sampler:$('sampler').value,
+    scheduler:$('scheduler').value,
+    positivePromptPrefix:$('positivePrefix').value,
+    positivePromptSuffix:$('positiveSuffix').value,
+    negativePromptPrefix:$('negativePrefix').value,
+    negativePromptSuffix:$('negativeSuffix').value,
+    characterDirs:[...new Set([...(settings.characterDirs||[]).filter(x=>x==='patron'),...Object.keys(profiles)])],
+    characterProfiles:profiles
+  };
+}
+function buildSummary(){
+  const s=collect();
+  $('summary').textContent=
+    `ComfyUI: ${s.comfyUrl}\nModel: ${s.animaModel}\nEncoder: ${s.animaTextEncoder}\nVAE: ${s.animaVae}\nRender: ${s.steps} steps / CFG ${s.cfg} / ${s.sampler} / ${s.scheduler}\nCharacters: ${Object.keys(s.characterProfiles).join(', ')||'(없음)'}`;
+}
+$('quality').onchange=()=>{
+  const v=$('quality').value;if(v==='fast')$('steps').value=26;else if(v==='balanced')$('steps').value=30;else if(v==='quality')$('steps').value=36;
+};
+$('steps').oninput=()=>{$('quality').value=Number($('steps').value)===26?'fast':Number($('steps').value)===30?'balanced':Number($('steps').value)===36?'quality':'custom'};
+
+async function probe(){
+  $('probeStatus').textContent='확인 중…';$('probeStatus').className='status';
+  try{
+    const b=await api('/api/setup/comfy-options?url='+encodeURIComponent($('comfyUrl').value.trim()));
+    options=b.options||options;
+    const d=b.system?.device||'장치 정보 없음';
+    $('probeStatus').textContent=`연결됨 · ComfyUI ${b.system?.version||'?'} · ${d}`;
+    $('probeStatus').className='status ok';
+    fillSelect($('animaModel'),options.diffusionModels,$('animaModel').value||settings.animaModel);
+    fillSelect($('textEncoder'),options.textEncoders,$('textEncoder').value||settings.animaTextEncoder);
+    fillSelect($('vae'),options.vaes,$('vae').value||settings.animaVae);
+    fillSelect($('sampler'),options.samplers,$('sampler').value||settings.sampler);
+    fillSelect($('scheduler'),options.schedulers,$('scheduler').value||settings.scheduler);
+    renderProfiles();
+  }catch(e){$('probeStatus').textContent='연결 실패: '+e.message;$('probeStatus').className='status err';}
+}
+$('probe').onclick=probe;
+
+async function loadBatch(){
+  try{
+    const b=await api('/api/batch/status');
+    $('batchStatus').textContent=`running: ${b.running}\npaused: ${b.paused}\nprogress: ${b.done} / ${b.total}\ncurrent: ${b.currentKey||'-'}\nerror: ${b.lastError||'-'}`;
+  }catch(e){$('batchStatus').textContent='상태 확인 실패: '+e.message;}
+}
+$('pauseBatch').onclick=async()=>{await api('/api/batch/pause',{method:'POST'});loadBatch()};
+$('resumeBatch').onclick=async()=>{await api('/api/batch/resume',{method:'POST'});loadBatch()};
+$('clearBatch').onclick=async()=>{if(confirm('대기 중인 미리 생성 목록을 비울까요?')){await api('/api/batch/clear',{method:'POST'});loadBatch()}};
+
+$('save').onclick=async()=>{
+  $('save').disabled=true;$('topStatus').textContent='저장 중…';
+  try{
+    const b=await api('/api/setup/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({settings:collect()})});
+    $('topStatus').textContent='저장 완료 · backend 재시작 필요';
+    alert('설정을 저장했습니다.\n기존 설정은 자동 백업되었습니다.\nbackend를 재시작하면 적용됩니다.');
+  }catch(e){$('topStatus').textContent='저장 실패';alert('저장 실패: '+e.message)}
+  finally{$('save').disabled=false}
+};
+
+async function init(){
+  try{
+    const b=await api('/api/setup/settings');settings=b.settings;
+    $('comfyUrl').value=settings.comfyUrl;
+    fillSelect($('animaModel'),[],settings.animaModel);fillSelect($('textEncoder'),[],settings.animaTextEncoder);fillSelect($('vae'),[],settings.animaVae);
+    fillSelect($('sampler'),[],settings.sampler);fillSelect($('scheduler'),[],settings.scheduler);
+    $('steps').value=settings.steps;$('cfg').value=settings.cfg;
+    $('quality').value=settings.steps===26?'fast':settings.steps===30?'balanced':settings.steps===36?'quality':'custom';
+    $('positivePrefix').value=settings.positivePromptPrefix||'';$('positiveSuffix').value=settings.positivePromptSuffix||'';
+    $('negativePrefix').value=settings.negativePromptPrefix||'';$('negativeSuffix').value=settings.negativePromptSuffix||'';
+    renderProfiles();$('topStatus').textContent='설정 파일: '+b.configPath;
+    probe();
+  }catch(e){$('topStatus').textContent='설정 로드 실패';$('probeStatus').textContent=e.message;$('probeStatus').className='status err'}
+}
+init();
+</script>
+</body>
+</html>
