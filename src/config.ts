@@ -71,6 +71,10 @@ export interface Config {
   /** Per-character LoRAs and trigger/base prompt fragments, keyed by character folder name. */
   characterProfiles: Record<string, CharacterProfile>
 
+  /** Optional scene-specific positive/negative hints keyed by Wayward scene slug. */
+  scenePromptHints: Record<string, string>
+  sceneNegativePromptHints: Record<string, string>
+
   allowedOrigins: string[]
   allowDelete: boolean
   maxDiskGb: number
@@ -164,6 +168,28 @@ function normalizeCharacterProfile(value: unknown): CharacterProfile | null {
     negativePromptPrefix: typeof typed.negativePromptPrefix === 'string' ? typed.negativePromptPrefix : '',
     negativePromptSuffix: typeof typed.negativePromptSuffix === 'string' ? typed.negativePromptSuffix : '',
   }
+}
+
+function parseStringMap(value: unknown): Record<string, string> {
+  let decoded = value
+  if (typeof value === 'string') {
+    const trimmed = value.trim()
+    if (!trimmed) return {}
+    try {
+      decoded = JSON.parse(trimmed)
+    } catch {
+      return {}
+    }
+  }
+  if (!decoded || typeof decoded !== 'object' || Array.isArray(decoded)) return {}
+  const result: Record<string, string> = {}
+  for (const [rawKey, rawValue] of Object.entries(decoded as Record<string, unknown>)) {
+    const key = rawKey.trim().toLowerCase()
+    if (!key || typeof rawValue !== 'string') continue
+    const text = rawValue.trim()
+    if (text) result[key] = text
+  }
+  return result
 }
 
 function parseCharacterProfiles(value: unknown): Record<string, CharacterProfile> {
@@ -281,6 +307,17 @@ export function resolveConfig(argv: string[] = [], cwd = process.cwd()): Config 
     ?? file.characterProfiles,
   )
 
+  const scenePromptHints = parseStringMap(
+    flags['scene-prompt-hints']
+    ?? process.env.WAYWARD_SCENE_PROMPT_HINTS
+    ?? file.scenePromptHints,
+  )
+  const sceneNegativePromptHints = parseStringMap(
+    flags['scene-negative-prompt-hints']
+    ?? process.env.WAYWARD_SCENE_NEGATIVE_PROMPT_HINTS
+    ?? file.sceneNegativePromptHints,
+  )
+
   return {
     host: pick('host', 'WAYWARD_HOST', 'host', '127.0.0.1'),
     port: pickNum('port', 'WAYWARD_PORT', 'port', DEFAULT_PORT),
@@ -299,6 +336,8 @@ export function resolveConfig(argv: string[] = [], cwd = process.cwd()): Config 
     negativePromptSuffix: pick('negative-suffix', 'WAYWARD_NEGATIVE_SUFFIX', 'negativePromptSuffix', ''),
     characterLoras,
     characterProfiles,
+    scenePromptHints,
+    sceneNegativePromptHints,
 
     allowedOrigins,
     allowDelete: flags['allow-delete'] === 'true' || envBool('WAYWARD_ALLOW_DELETE', file.allowDelete === true),
