@@ -104,8 +104,11 @@ textarea{min-height:80px;resize:vertical}.inline{display:flex;gap:8px;align-item
       <div id="summary" class="status"></div>
       <div class="inline" style="margin-top:10px">
         <button id="validateSetup">설정 검사</button>
+        <button id="renderTest">테스트 이미지 생성</button>
       </div>
       <div id="validationResult" class="status" style="margin-top:10px">아직 검사하지 않았습니다.</div>
+      <div id="testRenderResult" class="status" style="margin-top:10px" hidden></div>
+      <img id="testRenderImage" alt="Anima test render" hidden style="display:block;max-width:100%;max-height:520px;margin:10px auto 0;border:1px solid var(--line);border-radius:8px">
     </div>
     <div class="card">
       <h2>작업 제어</h2>
@@ -317,6 +320,27 @@ $('validateSetup').onclick=async()=>{
     $('validationResult').textContent='검사 실패: '+e.message;
     $('validationResult').className='status err';
   }
+};
+
+$('renderTest').onclick=async()=>{
+  const s=collect();
+  const characterId=Object.keys(s.characterProfiles)[0];
+  if(!characterId){alert('먼저 캐릭터 프로필을 하나 이상 추가하세요.');return;}
+  $('renderTest').disabled=true;
+  $('testRenderResult').hidden=false;
+  $('testRenderResult').textContent='테스트 이미지를 생성 중입니다…';
+  $('testRenderResult').className='status';
+  $('testRenderImage').hidden=true;
+  try{
+    const b=await api('/api/setup/render-test',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({settings:s,characterId})});
+    $('testRenderResult').textContent=`✓ ${characterId} 테스트 생성 성공 · ${b.filename}`;
+    $('testRenderResult').className='status ok';
+    $('testRenderImage').src=b.imageData;
+    $('testRenderImage').hidden=false;
+  }catch(e){
+    $('testRenderResult').textContent='테스트 생성 실패: '+e.message;
+    $('testRenderResult').className='status err';
+  }finally{$('renderTest').disabled=false;}
 };
 
 $('quality').onchange=()=>{
