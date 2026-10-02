@@ -83,12 +83,7 @@ const COMPLEX_INTERACTION_MARKERS = [
 
 function hasPromptMarker(prompt: string, marker: string): boolean {
   const text = prompt.toLowerCase().replace(/_/g, ' ')
-  const escaped = marker.replace(/[.*+?^${}()|[\]\\]/g, '\\function extractSceneSlug(talentName?: string): string | null {
-  if (!talentName) return null
-  const match = talentName.match(/__scene-(.+?)__outfit-/i)
-  return match?.[1]?.trim().toLowerCase() || null
-}
-')
+  const escaped = marker.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   return new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`, 'i').test(text)
 }
 
