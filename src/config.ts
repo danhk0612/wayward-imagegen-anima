@@ -16,6 +16,9 @@ import * as fs from 'node:fs'
  *  does not carry the default checkpoint, so art rendered on v12 keeps serving
  *  and only new renders use this. */
 export const DEFAULT_CHECKPOINT = 'waiIllustriousSDXL_v170.safetensors'
+export const DEFAULT_ANIMA_MODEL = 'anima-base-v1.0.safetensors'
+export const DEFAULT_ANIMA_TEXT_ENCODER = 'qwen_3_06b_base.safetensors'
+export const DEFAULT_ANIMA_VAE = 'qwen_image_vae.safetensors'
 
 export type WorkflowType = 'z-image' | 'illustrious'
 export type ImagePreset = 'illustrious' | 'anima'
@@ -28,6 +31,10 @@ export interface LoraSpec {
 
 export interface CharacterProfile {
   loras: LoraSpec[]
+  /** LoRA activation token(s), e.g. a trained character trigger. */
+  triggerPrompt: string
+  /** Stable identity tags that should accompany every scene for this character. */
+  basePrompt: string
   positivePromptPrefix: string
   positivePromptSuffix: string
   negativePromptPrefix: string
@@ -35,20 +42,20 @@ export interface CharacterProfile {
 }
 
 export interface Config {
-  /** Interface to bind. Loopback unless the operator explicitly opts out. */
   host: string
   port: number
-  /** Root of the art library. Holds `.image-cache.json` and `<workflow>/characters/...`. */
   imagesDir: string
-  /** Where per-run state lives (hits, batch queues, miss log). */
   stateDir: string
-  /** Base URL of the ComfyUI instance. */
   comfyUrl: string
-  /** Wan i2v workflow JSON. Video routes 501 without it rather than crashing. */
   wanWorkflowPath: string | null
 
   /** Image workflow preset used when the game asks for the standard still-image backend. */
   imagePreset: ImagePreset
+
+  /** Native Anima components. Anima is loaded as diffusion model + text encoder + VAE. */
+  animaModel: string
+  animaTextEncoder: string
+  animaVae: string
 
   /** Prompt text affixes automatically applied before sending work to ComfyUI. */
   positivePromptPrefix: string
@@ -62,31 +69,14 @@ export interface Config {
   /** Per-character LoRAs and trigger/base prompt fragments, keyed by character folder name. */
   characterProfiles: Record<string, CharacterProfile>
 
-  /**
-   * Origins allowed to call the API, beyond the always-allowed loopback set.
-   *
-   * Deliberately not `*`: this server writes files and commands a GPU, and
-   * Chrome's Local Network Access explicitly exempts `file://` pages, so the
-   * browser will not stop a hostile local page on our behalf.
-   */
   allowedOrigins: string[]
-
-  /** `DELETE /api/image/delete` is off unless the operator asks for it. */
   allowDelete: boolean
-
-  /** Refuse new writes once the art library passes this size. 0 = no ceiling. */
   maxDiskGb: number
-  /** Concurrent ComfyUI submissions for interactive work. */
   concurrency: number
-  /** Cap on queued interactive jobs; batch work has its own queue. */
   maxQueued: number
-  /** Interactive images per rolling hour. Bounds a drive-by to "GPU was busy". */
   maxImagesPerHour: number
-
-  /** Folder names under `<imagesDir>/<workflow>/characters/`. */
   characterDirs: string[]
 
-  /** Image workflow knobs — the ones worth changing without editing source. */
   checkpoint: string
   steps: number
   cfg: number
@@ -97,55 +87,15 @@ export interface Config {
   lora: string
   loraStrength: number
 
-  /**
-   * Re-encode renders as WebP when possible.
-   *
-   * Anime-style renders shrink roughly eightfold with no visible loss, which is
-   * the difference between a 3 GB art library and a 20 GB one. Needs the
-   * optional `sharp` package; without it renders stay PNG and nothing breaks,
-   * since every cache entry records the extension it actually wrote.
-   */
   webp: boolean
-
-  /**
-   * Refuse to start when WebP is on but `sharp` will not load. For a library
-   * that must stay all-WebP (the game's own): a silent PNG fallback there went
-   * unnoticed for ten days and 26,000 renders.
-   */
   requireWebp: boolean
-
-  /**
-   * How often to ask ComfyUI whether a job has finished. The default matches
-   * how long a render takes; a test drives it far faster.
-   */
   pollIntervalMs: number
-
-  /**
-   * Exit when this process id is gone.
-   *
-   * `bun run dev` passes its own pid. Without it, force-killing the parent (or
-   * just closing the terminal window — Windows gives a child no interceptable
-   * signal for that) leaves this server alive, holding the port and driving the
-   * GPU behind a window that looks closed. Orphaned background GPU work is a
-   * failure this project has been bitten by before; a liveness check removes
-   * the whole class rather than relying on a handler that cannot always run.
-   */
   parentPid: number | null
-
-  /** Verbose request logging. */
   verbose: boolean
 }
 
 export const DEFAULT_PORT = 8189
 
-/**
- * Character folders shipped with the game.
- *
- * The game's own list lives in `src/data/imageCharacters.ts`. This package is
- * published on its own and must not import across that boundary, so it carries
- * its own default; a test in the private repo asserts the two agree. A player
- * adding their own character overrides it via config.
- */
 export const DEFAULT_CHARACTER_DIRS = ['elena', 'mara', 'pippa', 'patron']
 
 function envNumber(name: string, fallback: number): number {
@@ -199,12 +149,13 @@ function parseLoraList(value: unknown): LoraSpec[] {
     .filter((item): item is LoraSpec => item !== null)
 }
 
-
 function normalizeCharacterProfile(value: unknown): CharacterProfile | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null
   const typed = value as Record<string, unknown>
   return {
     loras: parseLoraList(typed.loras),
+    triggerPrompt: typeof typed.triggerPrompt === 'string' ? typed.triggerPrompt : '',
+    basePrompt: typeof typed.basePrompt === 'string' ? typed.basePrompt : '',
     positivePromptPrefix: typeof typed.positivePromptPrefix === 'string' ? typed.positivePromptPrefix : '',
     positivePromptSuffix: typeof typed.positivePromptSuffix === 'string' ? typed.positivePromptSuffix : '',
     negativePromptPrefix: typeof typed.negativePromptPrefix === 'string' ? typed.negativePromptPrefix : '',
@@ -233,8 +184,6 @@ function parseCharacterProfiles(value: unknown): Record<string, CharacterProfile
   return result
 }
 
-/** Parse `--flag value`, `--flag=value`, and bare `--bool-flag`. */
-/** Whether `host` exposes the server beyond this machine. */
 export function boundBeyondLoopback(host: string): boolean {
   return host !== '127.0.0.1' && host !== 'localhost' && host !== '::1'
 }
@@ -275,10 +224,6 @@ export function resolveConfig(argv: string[] = [], cwd = process.cwd()): Config 
   const flags = parseArgs(argv)
   const file = readConfigFile(path.resolve(cwd, flags['config'] ?? 'wayward-imagegen.config.json'))
 
-  // An env var that is SET BUT EMPTY is an intentional empty value, not an
-  // absent one: `COMFYUI_LORA=''` is how you disable the speed LoRA for a
-  // checkpoint that already has acceleration baked in. Falling back to the
-  // default there would silently re-enable it.
   const pick = (flag: string, env: string, fileKey: string, fallback: string): string => {
     if (flags[flag] != null) return flags[flag]
     const e = process.env[env]
@@ -342,6 +287,9 @@ export function resolveConfig(argv: string[] = [], cwd = process.cwd()): Config 
     wanWorkflowPath,
 
     imagePreset,
+    animaModel: pick('anima-model', 'ANIMA_MODEL', 'animaModel', DEFAULT_ANIMA_MODEL),
+    animaTextEncoder: pick('anima-text-encoder', 'ANIMA_TEXT_ENCODER', 'animaTextEncoder', DEFAULT_ANIMA_TEXT_ENCODER),
+    animaVae: pick('anima-vae', 'ANIMA_VAE', 'animaVae', DEFAULT_ANIMA_VAE),
     positivePromptPrefix: pick('positive-prefix', 'WAYWARD_POSITIVE_PREFIX', 'positivePromptPrefix', ''),
     positivePromptSuffix: pick('positive-suffix', 'WAYWARD_POSITIVE_SUFFIX', 'positivePromptSuffix', ''),
     negativePromptPrefix: pick('negative-prefix', 'WAYWARD_NEGATIVE_PREFIX', 'negativePromptPrefix', ''),
@@ -350,7 +298,6 @@ export function resolveConfig(argv: string[] = [], cwd = process.cwd()): Config 
     characterProfiles,
 
     allowedOrigins,
-
     allowDelete: flags['allow-delete'] === 'true' || envBool('WAYWARD_ALLOW_DELETE', file.allowDelete === true),
 
     maxDiskGb: pickNum('max-disk-gb', 'WAYWARD_MAX_DISK_GB', 'maxDiskGb', 0),
@@ -361,12 +308,12 @@ export function resolveConfig(argv: string[] = [], cwd = process.cwd()): Config 
     characterDirs,
 
     checkpoint: pick('checkpoint', 'COMFYUI_CHECKPOINT', 'checkpoint', DEFAULT_CHECKPOINT),
-    steps: pickNum('steps', 'COMFYUI_STEPS', 'steps', 9),
-    cfg: pickNum('cfg', 'COMFYUI_CFG', 'cfg', 1.5),
-    sampler: pick('sampler', 'COMFYUI_SAMPLER', 'sampler', 'euler_ancestral'),
+    steps: pickNum('steps', 'COMFYUI_STEPS', 'steps', imagePreset === 'anima' ? 30 : 9),
+    cfg: pickNum('cfg', 'COMFYUI_CFG', 'cfg', imagePreset === 'anima' ? 4 : 1.5),
+    sampler: pick('sampler', 'COMFYUI_SAMPLER', 'sampler', imagePreset === 'anima' ? 'er_sde' : 'euler_ancestral'),
     scheduler: pick('scheduler', 'COMFYUI_SCHEDULER', 'scheduler', 'simple'),
     clipSkip: pickNum('clip-skip', 'COMFYUI_CLIP_SKIP', 'clipSkip', -2),
-    lora: pick('lora', 'COMFYUI_LORA', 'lora', 'sdxl_lightning_8step_lora.safetensors'),
+    lora: pick('lora', 'COMFYUI_LORA', 'lora', imagePreset === 'anima' ? '' : 'sdxl_lightning_8step_lora.safetensors'),
     loraStrength: pickNum('lora-strength', 'COMFYUI_LORA_STRENGTH', 'loraStrength', 1),
 
     webp: flags['no-webp'] === 'true' ? false : !envBool('WAYWARD_NO_WEBP', file.webp === false),
