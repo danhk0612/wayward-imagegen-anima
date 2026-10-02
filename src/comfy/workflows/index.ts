@@ -19,6 +19,7 @@ export interface GenOverrides {
   sampler?: string
   scheduler?: string
   disableComplexScenePolicy?: boolean
+  allowAnimaTuningOverrides?: boolean
 }
 
 export type ComfyGraph = Record<string, object>
@@ -231,11 +232,14 @@ export function buildAnimaPrompt(
   }
 
   const actualSeed = seed ?? randomSeed()
-  const steps = overrides?.steps ?? config.steps
-  const cfg = overrides?.cfg ?? config.cfg
-  const sampler = overrides?.sampler ?? config.sampler
-  const scheduler = overrides?.scheduler ?? config.scheduler
-  const modelName = overrides?.checkpoint?.trim() || config.animaModel
+  const allowTuningOverrides = overrides?.allowAnimaTuningOverrides === true
+  const steps = allowTuningOverrides ? (overrides?.steps ?? config.steps) : config.steps
+  const cfg = allowTuningOverrides ? (overrides?.cfg ?? config.cfg) : config.cfg
+  const sampler = allowTuningOverrides ? (overrides?.sampler ?? config.sampler) : config.sampler
+  const scheduler = allowTuningOverrides ? (overrides?.scheduler ?? config.scheduler) : config.scheduler
+  const modelName = allowTuningOverrides
+    ? (overrides?.checkpoint?.trim() || config.animaModel)
+    : config.animaModel
   const { width, height } = parseDimensions(overrides?.dimensions)
 
   const characterName = talentName ? extractCharacterName(talentName, config.characterDirs) : null
@@ -324,7 +328,9 @@ export function buildAnimaPrompt(
     nodes[id] = {
       inputs: {
         lora_name: config.lora,
-        strength_model: overrides?.loraStrength ?? config.loraStrength ?? 1,
+        strength_model: allowTuningOverrides
+          ? (overrides?.loraStrength ?? config.loraStrength ?? 1)
+          : (config.loraStrength ?? 1),
         model: modelOutput,
       },
       class_type: 'LoraLoaderModelOnly',
