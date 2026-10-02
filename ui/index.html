@@ -1,0 +1,312 @@
+<title>Wayward image backend</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root {
+    --bg: #1c1917; --panel: #292524; --line: #44403c;
+    --text: #e7e5e4; --dim: #a8a29e; --faint: #78716c;
+    --accent: #f59e0b; --good: #34d399; --bad: #fb7185;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.5 system-ui, -apple-system, Segoe UI, sans-serif;
+  }
+  header {
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+    padding: 12px 20px; border-bottom: 1px solid var(--line);
+    position: sticky; top: 0; background: var(--bg); z-index: 10;
+  }
+  h1 { font-size: 16px; margin: 0; color: var(--accent); font-weight: 600; }
+  .status { font-size: 13px; color: var(--dim); }
+  .status b { color: var(--text); font-weight: 600; }
+  .grow { flex: 1; }
+  select, button, input {
+    background: var(--panel); color: var(--text);
+    border: 1px solid var(--line); border-radius: 6px;
+    padding: 6px 10px; font: inherit;
+  }
+  button { cursor: pointer; }
+  button:hover:not(:disabled) { border-color: var(--faint); }
+  button:disabled { opacity: .45; cursor: default; }
+  button.good { border-color: #065f46; }
+  button.bad { border-color: #9f1239; }
+  main { display: grid; grid-template-columns: minmax(0,1fr) 340px; gap: 20px; padding: 20px; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  .stage {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    min-height: 60vh; overflow: hidden;
+  }
+  .stage img { max-width: 100%; max-height: 80vh; display: block; }
+  .empty { color: var(--faint); padding: 40px; text-align: center; }
+  aside { display: flex; flex-direction: column; gap: 14px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
+  .card h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .08em;
+             color: var(--faint); margin: 0 0 8px; font-weight: 600; }
+  .key { font-family: ui-monospace, Consolas, monospace; font-size: 11px;
+         color: var(--dim); word-break: break-all; }
+  .prompt { font-size: 12px; color: var(--dim); max-height: 200px; overflow-y: auto;
+            white-space: pre-wrap; }
+  .verdict { font-size: 13px; }
+  .verdict.good { color: var(--good); }
+  .verdict.bad { color: var(--bad); }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .actions button { flex: 1; min-width: 90px; }
+  .hint { font-size: 12px; color: var(--faint); }
+  dialog {
+    background: var(--panel); color: var(--text); border: 1px solid var(--line);
+    border-radius: 10px; padding: 18px; max-width: 460px; width: 90%;
+  }
+  dialog::backdrop { background: rgba(0,0,0,.6); }
+  dialog textarea {
+    width: 100%; min-height: 90px; background: var(--bg); color: var(--text);
+    border: 1px solid var(--line); border-radius: 6px; padding: 8px; font: inherit;
+  }
+  .banner { padding: 10px 20px; background: #7c2d12; color: #fed7aa; font-size: 13px; }
+</style>
+
+<div id="banner" class="banner" hidden></div>
+
+<header>
+  <h1>Wayward images</h1>
+  <div class="status" id="status">connecting…</div>
+  <div class="grow"></div>
+  <select id="character"><option value="">every character</option></select>
+  <label class="status"><input type="checkbox" id="undecided" checked style="vertical-align:-2px"> only undecided</label>
+  <button id="reload">Reload</button>
+</header>
+
+<main>
+  <div class="stage" id="stage"><div class="empty">Loading…</div></div>
+
+  <aside>
+    <div class="card">
+      <h2>Verdict</h2>
+      <div class="actions">
+        <button id="keep" class="good" accesskey="j">Keep &nbsp;<span class="hint">J</span></button>
+        <button id="redo" class="bad" accesskey="k">Redo &nbsp;<span class="hint">K</span></button>
+      </div>
+      <p class="hint" style="margin:10px 0 0">
+        Your verdict outranks anything a scoring model says. “Redo” asks for a
+        fresh render of the same moment and can carry a note explaining what is
+        wrong.
+      </p>
+      <div class="verdict" id="verdict" style="margin-top:8px"></div>
+    </div>
+
+    <div class="card">
+      <h2>Position</h2>
+      <div class="actions">
+        <button id="prev">← Back</button>
+        <button id="next">Next →</button>
+      </div>
+      <div class="status" id="position" style="margin-top:8px"></div>
+    </div>
+
+    <div class="card">
+      <h2>This image</h2>
+      <div class="key" id="key"></div>
+      <div class="prompt" id="prompt" style="margin-top:8px"></div>
+    </div>
+
+    <div class="card">
+      <h2>Rendering now</h2>
+      <div class="status" id="inflight">nothing queued</div>
+    </div>
+  </aside>
+</main>
+
+<dialog id="noteDialog">
+  <h2 style="margin:0 0 8px;font-size:15px">What is wrong with it?</h2>
+  <p class="hint" style="margin:0 0 10px">
+    Optional. Plain words are best — “her hand has six fingers”, “she should be
+    facing away”. Skip it and you simply get another attempt.
+  </p>
+  <textarea id="noteText" placeholder="…"></textarea>
+  <div class="actions" style="margin-top:12px">
+    <button id="noteSkip">Skip</button>
+    <button id="noteSend" class="bad">Redo with this note</button>
+  </div>
+</dialog>
+
+<script>
+/**
+ * The review page for a locally-run backend.
+ *
+ * Deliberately one plain file with no build step: it is served by the backend
+ * itself, and someone who wants to change it should be able to open it and
+ * read it. That is also why it talks to the API with fetch and nothing else.
+ */
+const api = (path) => fetch(path, { credentials: 'omit' });
+
+const el = (id) => document.getElementById(id);
+const state = { entries: [], cursor: 0, detail: null, capabilities: [] };
+
+function setBanner(text) {
+  el('banner').hidden = !text;
+  el('banner').textContent = text || '';
+}
+
+async function loadHealth() {
+  try {
+    const res = await api('/api/image/health');
+    const body = await res.json();
+    state.capabilities = body.capabilities || [];
+    el('status').innerHTML =
+      `<b>${(body.images ?? 0).toLocaleString()}</b> images · ComfyUI ` +
+      (body.comfyui === 'connected' ? 'ready' : '<b>not running</b>');
+    // A backend without ComfyUI can still be reviewed — you just cannot ask
+    // for a new render, so say so rather than letting Redo fail silently.
+    setBanner(body.comfyui === 'connected'
+      ? ''
+      : 'ComfyUI is not running, so “Redo” cannot render anything yet.');
+  } catch {
+    el('status').textContent = 'backend not reachable';
+    setBanner('Cannot reach the image backend. Is wayward-imagegen still running?');
+  }
+}
+
+async function loadQueue() {
+  const params = new URLSearchParams({ limit: '500' });
+  const character = el('character').value;
+  if (character) params.set('character', character);
+  if (el('undecided').checked) params.set('undecided', '1');
+
+  const res = await api('/api/review/queue?' + params);
+  const body = await res.json();
+  state.entries = body.entries || [];
+  state.cursor = 0;
+  rebuildCharacterFilter();
+  render();
+}
+
+let charactersKnown = false;
+async function rebuildCharacterFilter() {
+  if (charactersKnown) return;
+  charactersKnown = true;
+  try {
+    const body = await (await api('/api/wife-image-counts')).json();
+    for (const name of Object.keys(body.counts || {})) {
+      const opt = document.createElement('option');
+      opt.value = name;
+      opt.textContent = name;
+      el('character').append(opt);
+    }
+  } catch { /* the filter is a convenience, not a requirement */ }
+}
+
+function current() { return state.entries[state.cursor] || null; }
+
+async function render() {
+  const entry = current();
+  el('position').textContent = state.entries.length
+    ? `${state.cursor + 1} of ${state.entries.length}`
+    : 'nothing to review';
+
+  if (!entry) {
+    el('stage').innerHTML = '<div class="empty">Nothing left to review here.<br>' +
+      'Try turning off “only undecided”, or generate some images first.</div>';
+    el('key').textContent = '';
+    el('prompt').textContent = '';
+    el('verdict').textContent = '';
+    return;
+  }
+
+  el('stage').innerHTML = '';
+  const img = new Image();
+  img.src = entry.imageUrl;
+  img.alt = entry.talentName;
+  el('stage').append(img);
+
+  el('key').textContent = entry.talentName;
+  el('verdict').textContent = entry.rating
+    ? (entry.rating === 'good' ? 'kept' : 'marked for redo') + (entry.note ? ` — “${entry.note}”` : '')
+    : '';
+  el('verdict').className = 'verdict ' + (entry.rating === 'good' ? 'good' : entry.rating ? 'bad' : '');
+
+  // The prompt is fetched per image on purpose: including it in the queue made
+  // that response tens of megabytes of text the list never shows.
+  el('prompt').textContent = 'loading prompt…';
+  try {
+    const detail = await (await api('/api/review/entry?key=' + encodeURIComponent(entry.key))).json();
+    if (current() === entry) el('prompt').textContent = detail.prompt || '(no prompt recorded)';
+  } catch {
+    if (current() === entry) el('prompt').textContent = '(prompt unavailable)';
+  }
+}
+
+function step(by) {
+  if (!state.entries.length) return;
+  state.cursor = Math.min(Math.max(0, state.cursor + by), state.entries.length - 1);
+  render();
+}
+
+async function mark(rating, note) {
+  const entry = current();
+  if (!entry) return;
+  try {
+    await fetch('/api/review/mark', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'omit',
+      body: JSON.stringify({ key: entry.key, rating, ...(note ? { note } : {}) }),
+    });
+    entry.rating = rating;
+    entry.note = note;
+  } catch { /* the verdict is not worth interrupting the flow over */ }
+
+  // Move on immediately. Reviewing is a long job and stopping to confirm each
+  // one makes it longer.
+  if (el('undecided').checked) {
+    state.entries.splice(state.cursor, 1);
+    if (state.cursor >= state.entries.length) state.cursor = Math.max(0, state.entries.length - 1);
+    render();
+  } else {
+    step(1);
+  }
+}
+
+function askForNote() {
+  el('noteText').value = '';
+  el('noteDialog').showModal();
+  el('noteText').focus();
+}
+
+async function loadInflight() {
+  try {
+    const body = await (await api('/api/review/inflight')).json();
+    const jobs = body.jobs || [];
+    el('inflight').textContent = jobs.length
+      ? jobs.map(j => `${j.talentName.slice(0, 40)} — ${j.status}`).join('\n')
+      : 'nothing queued';
+  } catch { /* transient */ }
+}
+
+el('keep').onclick = () => mark('good');
+el('redo').onclick = () => askForNote();
+el('noteSkip').onclick = () => { el('noteDialog').close(); mark('regen'); };
+el('noteSend').onclick = () => {
+  const note = el('noteText').value.trim();
+  el('noteDialog').close();
+  mark('regen', note || undefined);
+};
+el('next').onclick = () => step(1);
+el('prev').onclick = () => step(-1);
+el('reload').onclick = () => { loadHealth(); loadQueue(); };
+el('character').onchange = loadQueue;
+el('undecided').onchange = loadQueue;
+
+document.addEventListener('keydown', (e) => {
+  if (el('noteDialog').open) return;
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  if (e.key === 'j') { e.preventDefault(); mark('good'); }
+  if (e.key === 'k') { e.preventDefault(); askForNote(); }
+  if (e.key === 'ArrowRight') { e.preventDefault(); step(1); }
+  if (e.key === 'ArrowLeft') { e.preventDefault(); step(-1); }
+});
+
+loadHealth();
+loadQueue();
+loadInflight();
+setInterval(loadInflight, 4000);
+</script>

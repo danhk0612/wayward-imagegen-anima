@@ -1,0 +1,78 @@
+{
+  "_comment": "Example config for an Anima-first setup. Replace every model/LoRA filename and trigger prompt with your exact local setup.",
+  "port": 8189,
+  "host": "127.0.0.1",
+  "imagesDir": "images",
+  "comfyUrl": "http://127.0.0.1:8188",
+
+  "imagePreset": "anima",
+  "checkpoint": "your_anima_checkpoint.safetensors",
+
+  "_speed_lora_note": "Optional model-only speed LoRA. Keep empty unless your tested Anima workflow actually uses one.",
+  "lora": "",
+  "loraStrength": 1,
+
+  "_global_lora_note": "Optional full model+clip LoRAs applied to every character. Usually leave empty and use characterProfiles instead.",
+  "characterLoras": [],
+
+  "_profile_note": "Wayward requests contain the character name. The server automatically selects the matching profile, LoRA and trigger/base prompt.",
+  "characterProfiles": {
+    "elena": {
+      "loras": [
+        {
+          "name": "elena_anima_character.safetensors",
+          "strengthModel": 0.9,
+          "strengthClip": 0.9
+        }
+      ],
+      "positivePromptPrefix": "elena_trigger, 1girl, character-specific appearance tags",
+      "positivePromptSuffix": "",
+      "negativePromptPrefix": "",
+      "negativePromptSuffix": ""
+    },
+    "mara": {
+      "loras": [
+        {
+          "name": "mara_anima_character.safetensors",
+          "strengthModel": 0.9,
+          "strengthClip": 0.9
+        }
+      ],
+      "positivePromptPrefix": "mara_trigger, 1girl, character-specific appearance tags",
+      "positivePromptSuffix": "",
+      "negativePromptPrefix": "",
+      "negativePromptSuffix": ""
+    },
+    "pippa": {
+      "loras": [
+        {
+          "name": "pippa_anima_character.safetensors",
+          "strengthModel": 0.9,
+          "strengthClip": 0.9
+        }
+      ],
+      "positivePromptPrefix": "pippa_trigger, 1girl, character-specific appearance tags",
+      "positivePromptSuffix": "",
+      "negativePromptPrefix": "",
+      "negativePromptSuffix": ""
+    }
+  },
+
+  "_global_prompt_note": "Global tags wrap every Wayward scene prompt. Character profile tags are inserted between the global prefix and the game's scene prompt.",
+  "positivePromptPrefix": "masterpiece, best quality",
+  "positivePromptSuffix": "",
+  "negativePromptPrefix": "worst quality, low quality, bad anatomy",
+  "negativePromptSuffix": "",
+
+  "steps": 20,
+  "cfg": 5,
+  "sampler": "dpmpp_2m",
+  "scheduler": "karras",
+  "clipSkip": -2,
+
+  "maxDiskGb": 0,
+  "maxQueued": 64,
+  "maxImagesPerHour": 400,
+  "allowDelete": false,
+  "wanWorkflowPath": ""
+}
