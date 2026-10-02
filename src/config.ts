@@ -35,6 +35,8 @@ export interface CharacterProfile {
   triggerPrompt: string
   /** Stable identity tags that should accompany every scene for this character. */
   basePrompt: string
+  /** Exact leading game prompt fragment to remove before applying this custom identity. */
+  gamePromptPrefixToStrip: string
   positivePromptPrefix: string
   positivePromptSuffix: string
   negativePromptPrefix: string
@@ -156,6 +158,7 @@ function normalizeCharacterProfile(value: unknown): CharacterProfile | null {
     loras: parseLoraList(typed.loras),
     triggerPrompt: typeof typed.triggerPrompt === 'string' ? typed.triggerPrompt : '',
     basePrompt: typeof typed.basePrompt === 'string' ? typed.basePrompt : '',
+    gamePromptPrefixToStrip: typeof typed.gamePromptPrefixToStrip === 'string' ? typed.gamePromptPrefixToStrip : '',
     positivePromptPrefix: typeof typed.positivePromptPrefix === 'string' ? typed.positivePromptPrefix : '',
     positivePromptSuffix: typeof typed.positivePromptSuffix === 'string' ? typed.positivePromptSuffix : '',
     negativePromptPrefix: typeof typed.negativePromptPrefix === 'string' ? typed.negativePromptPrefix : '',
