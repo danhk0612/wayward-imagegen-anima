@@ -13,6 +13,7 @@ import type { CacheStore } from '../cache/cacheStore.ts'
 import { ComfyClient, inputChoices } from '../comfy/client.ts'
 import { Router, sendJson, HttpError, type RequestContext } from '../http/router.ts'
 import { readJson } from '../http/body.ts'
+import { buildComfyPrompt } from '../comfy/workflows/index.ts'
 
 const SETUP_BODY_LIMIT = 2 * 1024 * 1024
 const MAX_PROMPT_LENGTH = 100_000
@@ -495,6 +496,72 @@ export function registerSetupRoutes(router: Router, config: Config, cache: Cache
         comfyVersion: (stats.system as Record<string, unknown> | undefined)?.comfyui_version ?? null,
       },
     })
+  })
+
+  router.post('/api/setup/render-test', async ctx => {
+    requireLocal(ctx)
+    const body = await readJson<{ settings?: unknown; characterId?: string }>(ctx.req, SETUP_BODY_LIMIT)
+    const settings = normalizeSettings(body.settings)
+    const characterId = (body.characterId ?? Object.keys(settings.characterProfiles)[0] ?? '').trim().toLowerCase()
+    if (!CHARACTER_ID.test(characterId) || !settings.characterProfiles[characterId]) {
+      throw new HttpError(400, 'choose a configured character for the test render')
+    }
+
+    const testConfig: Config = {
+      ...config,
+      ...settings,
+      imagePreset: 'anima',
+      lora: '',
+      loraStrength: 1,
+    }
+    const comfy = new ComfyClient(settings.comfyUrl)
+    if (!await comfy.isReachable(5000)) {
+      throw new HttpError(503, 'ComfyUI is not reachable')
+    }
+
+    const graph = buildComfyPrompt(
+      testConfig,
+      '1girl, portrait, looking at viewer, simple background, natural expression',
+      'worst quality, low quality, bad anatomy, bad hands, text, watermark',
+      `setup_test_${characterId}`,
+      'illustrious',
+      Math.floor(Date.now() % 2_000_000_000),
+      { disableComplexScenePolicy: true },
+      undefined,
+      `${characterId}__setup-test`,
+    )
+
+    let promptId: string
+    try {
+      promptId = await comfy.submit(graph, true)
+    } catch (err) {
+      throw new HttpError(500, (err as Error).message)
+    }
+
+    const deadline = Date.now() + 240_000
+    while (Date.now() < deadline) {
+      await new Promise(resolve => setTimeout(resolve, 1200))
+      const result = await comfy.history(promptId)
+      if (result.error) throw new HttpError(500, result.error)
+      if (!result.done) continue
+      const output = result.images?.[0]
+      if (!output) throw new HttpError(500, result.report ?? 'test render completed without an image')
+      const bytes = await comfy.view(output)
+      if (!bytes) throw new HttpError(500, 'could not read the rendered image from ComfyUI')
+      const ext = path.extname(output.filename).toLowerCase()
+      const mime = ext === '.webp' ? 'image/webp'
+        : ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg'
+          : 'image/png'
+      sendJson(ctx.res, 200, {
+        ok: true,
+        promptId,
+        filename: output.filename,
+        imageData: `data:${mime};base64,${bytes.toString('base64')}`,
+      })
+      return
+    }
+
+    throw new HttpError(504, 'test render did not finish within 240 seconds')
   })
 
   router.get('/api/setup/wayward', ctx => {
