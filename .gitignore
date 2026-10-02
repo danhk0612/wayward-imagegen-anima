@@ -9,3 +9,7 @@ state/
 # Logs and temporary files
 *.log
 *.tmp
+images-quality-test/
+AB-anima-models/
+deployment-backup/
+dist/
