@@ -261,7 +261,7 @@ function profileTemplate(id,p={}){
     <button class="addLora">+ LoRA 추가</button>
     <div class="hint">LoRA 목록은 ComfyUI가 인식한 파일에서 자동으로 가져옵니다. 실제 Windows 경로를 입력하지 않습니다.</div>
 
-    <div class="row"><label>Trigger Prompt</label><div><input class="trigger"><div class="hint">LoRA 제작자가 지정한 활성화 token/tag만 넣습니다. 예: queen_shua</div></div></div>
+    <div class="row"><label>Trigger Prompt</label><div><input class="trigger"><div class="inline" style="margin-top:6px"><button class="readTriggerMetadata">LoRA metadata에서 찾기</button></div><div class="triggerMetaStatus hint" style="margin-top:6px">LoRA 제작자가 지정한 활성화 token/tag만 넣습니다. 예: queen_shua. metadata에 명시된 trigger가 있으면 후보를 읽어올 수 있습니다.</div></div></div>
     <div class="row"><label>기본 캐릭터 Prompt</label><div><textarea class="base"></textarea><div class="hint">모든 장면에서 변하지 않는 외형/정체성만 넣습니다. 머리·눈·체형·고유 장식 등. 포즈·표정·복장·배경·행동은 Wayward 장면 프롬프트에 맡깁니다.</div></div></div>
     <div class="row"><label>게임 기본 Prompt 제거</label><div><textarea class="strip"></textarea><div class="inline"><button class="analyseGamePrompt">실제 게임 Prompt에서 자동 분석</button><button class="applyGamePrompt" hidden>추천값 적용</button></div><div class="gamePromptStatus hint" style="margin-top:6px">기존 Wayward 캐릭터 identity가 새 LoRA와 충돌할 때만 제거합니다. 정확한 앞부분(prefix)만 제거하며 중간 태그는 삭제하지 않습니다.</div></div></div>
     <details><summary>고급 캐릭터 프롬프트</summary>
@@ -307,6 +307,53 @@ function profileTemplate(id,p={}){
     parts.push('나머지 태그는 기본 캐릭터 Prompt에 보존');
     status.textContent=parts.join(' · ');
     status.className='assistantStatus status '+(parsed.trigger?'ok':'');
+  };
+
+  box.querySelector('.readTriggerMetadata').onclick=async()=>{
+    const status=box.querySelector('.triggerMetaStatus');
+    const selected=[...box.querySelectorAll('.lora-row .lname')].map(x=>x.value).find(Boolean);
+    if(!selected){
+      status.textContent='먼저 캐릭터 LoRA를 선택하세요.';
+      status.className='triggerMetaStatus hint err';
+      return;
+    }
+    status.textContent='LoRA metadata를 확인 중…';
+    status.className='triggerMetaStatus hint';
+    try{
+      const b=await api('/api/setup/lora-metadata?url='+encodeURIComponent($('comfyUrl').value.trim())+'&filename='+encodeURIComponent(selected));
+      status.innerHTML='';
+      const candidates=b.triggerCandidates||[];
+      if(!b.metadataAvailable){
+        status.textContent='이 LoRA에서 읽을 수 있는 safetensors metadata가 없습니다. 추천 프롬프트 또는 제작자 설명의 trigger를 사용하세요.';
+        return;
+      }
+      if(!candidates.length){
+        status.textContent='metadata는 있지만 명시적인 trigger 항목은 없습니다. 학습 태그 통계만으로 trigger를 추측하지는 않습니다.';
+        return;
+      }
+      const label=document.createElement('span');
+      label.textContent='metadata trigger 후보: ';
+      status.append(label);
+      for(const candidate of candidates){
+        const btn=document.createElement('button');
+        btn.style.margin='3px';
+        btn.textContent=candidate;
+        btn.onclick=()=>{
+          box.querySelector('.trigger').value=candidate;
+          status.textContent='Trigger Prompt에 적용: '+candidate;
+          status.className='triggerMetaStatus hint ok';
+        };
+        status.append(btn);
+      }
+      if(candidates.length===1&&!box.querySelector('.trigger').value.trim()){
+        box.querySelector('.trigger').value=candidates[0];
+        status.textContent='metadata의 단일 Trigger를 자동 적용했습니다: '+candidates[0];
+        status.className='triggerMetaStatus hint ok';
+      }
+    }catch(e){
+      status.textContent='LoRA metadata 확인 실패: '+e.message;
+      status.className='triggerMetaStatus hint err';
+    }
   };
 
   box.querySelector('.analyseGamePrompt').onclick=async()=>{
