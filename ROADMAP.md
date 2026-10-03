@@ -25,8 +25,8 @@ Completed:
 - Test the setup wizard against a clean Wayward folder on Windows.
 - Verify first-run flow: launcher -> setup -> save -> automatic backend restart -> game.
 - Verify a character with no static image pack generates on demand and via pre-generation.
-- Verify disable/restore of a downloaded image pack is reversible with real pack files.
-- Verify cancel/shutdown while a batch image is running.
+- Verify disable/restore of a downloaded image pack is reversible with real pack files in a disposable/sandbox Wayward copy, not a live library.
+- Verify cancel/shutdown while a batch image is running without deleting completed art.
 - Check Korean UI text and error messages on Windows PowerShell 5.1.
 
 ## Optional later work
@@ -36,3 +36,7 @@ Completed:
 - Optional complex-scene policy UI.
 - Model/package download helpers only if licensing and maintenance cost remain acceptable.
 - Additional renderer backends such as Forge as separate adapters.
+
+## Production-safety rule
+
+Do not use destructive generated-art reset/deletion checks against a live image library. Routine deploys preserve the config, generated art, cache and static-pack state unless an explicit destructive switch/action is used.
