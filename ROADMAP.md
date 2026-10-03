@@ -41,6 +41,9 @@ Completed:
 - Runtime integration smoke verifies cancelling a running backend-owned batch render leaves completed generated art unchanged.
 - Full HTTP shutdown lifecycle smoke verifies an active backend-owned batch render is interrupted, the server closes, and previously completed art remains unchanged.
 - External Windows server manager reports the hidden backend PID/status/batch progress and can start/stop/restart/open setup without launching the game; cross-install port ownership is guarded.
+- Windows tray manager exposes persistent backend running/generating/paused state and reuses the external server-manager commands.
+- Optional idle auto-shutdown is disabled by default and blocked by foreground work, incomplete/running/paused batch work, pending submissions, backend jobs, or backend-owned ComfyUI work.
+- Tray, setup UI and console manager consume the same canonical runtime status API including last game request and idle-shutdown schedule/blockers.
 
 ## Before 0.2.0 release
 
