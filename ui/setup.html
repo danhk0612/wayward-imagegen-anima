@@ -106,6 +106,11 @@ textarea{min-height:80px;resize:vertical}.inline{display:flex;gap:8px;align-item
         <button id="validateSetup">설정 검사</button>
         <button id="renderTest">테스트 이미지 생성</button>
       </div>
+      <div class="inline" style="margin-top:10px">
+        <button id="exportSettings">설정 내보내기</button>
+        <button id="importSettings">설정 불러오기</button>
+        <input id="importSettingsFile" type="file" accept=".json,application/json" hidden>
+      </div>
       <div id="validationResult" class="status" style="margin-top:10px">아직 검사하지 않았습니다.</div>
       <div id="testRenderResult" class="status" style="margin-top:10px" hidden></div>
       <img id="testRenderImage" alt="Anima test render" hidden style="display:block;max-width:100%;max-height:520px;margin:10px auto 0;border:1px solid var(--line);border-radius:8px">
@@ -308,6 +313,25 @@ function collect(){
     characterProfiles:profiles
   };
 }
+function applySettingsToForm(s){
+  settings=s;
+  $('comfyUrl').value=s.comfyUrl||'http://127.0.0.1:8188';
+  fillSelect($('animaModel'),options.diffusionModels,s.animaModel||'');
+  fillSelect($('textEncoder'),options.textEncoders,s.animaTextEncoder||'');
+  fillSelect($('vae'),options.vaes,s.animaVae||'');
+  fillSelect($('sampler'),options.samplers,s.sampler||'er_sde');
+  fillSelect($('scheduler'),options.schedulers,s.scheduler||'simple');
+  $('steps').value=s.steps??30;
+  $('cfg').value=s.cfg??4.5;
+  $('animaDimensions').value=s.animaDimensions||'';
+  $('quality').value=Number(s.steps)===26?'fast':Number(s.steps)===30?'balanced':Number(s.steps)===36?'quality':'custom';
+  $('positivePrefix').value=s.positivePromptPrefix||'';
+  $('positiveSuffix').value=s.positivePromptSuffix||'';
+  $('negativePrefix').value=s.negativePromptPrefix||'';
+  $('negativeSuffix').value=s.negativePromptSuffix||'';
+  renderProfiles();
+}
+
 function buildSummary(){
   const s=collect();
   $('summary').textContent=
@@ -327,6 +351,42 @@ $('validateSetup').onclick=async()=>{
   }catch(e){
     $('validationResult').textContent='검사 실패: '+e.message;
     $('validationResult').className='status err';
+  }
+};
+
+$('exportSettings').onclick=()=>{
+  const blob=new Blob([JSON.stringify(collect(),null,2)+'\n'],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;
+  a.download='wayward-anima-settings.json';
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+};
+$('importSettings').onclick=()=>$('importSettingsFile').click();
+$('importSettingsFile').onchange=async e=>{
+  const file=e.target.files?.[0];
+  if(!file)return;
+  try{
+    const parsed=JSON.parse(await file.text());
+    const imported=parsed?.settings&&typeof parsed.settings==='object'?parsed.settings:parsed;
+    if(!imported||typeof imported!=='object'||Array.isArray(imported))throw new Error('설정 JSON 객체가 아닙니다.');
+    applySettingsToForm({
+      ...collect(),
+      ...imported,
+      imagePreset:'anima',
+      characterProfiles:imported.characterProfiles||{},
+      characterDirs:Array.isArray(imported.characterDirs)?imported.characterDirs:[],
+    });
+    $('topStatus').textContent='설정을 불러왔습니다 · 아직 저장되지 않음';
+    buildSummary();
+    setPage(4);
+  }catch(err){
+    alert('설정 불러오기 실패: '+err.message);
+  }finally{
+    e.target.value='';
   }
 };
 
@@ -421,16 +481,9 @@ $('save').onclick=async()=>{
 
 async function init(){
   try{
-    const b=await api('/api/setup/settings');settings=b.settings;
-    $('comfyUrl').value=settings.comfyUrl;
-    fillSelect($('animaModel'),[],settings.animaModel);fillSelect($('textEncoder'),[],settings.animaTextEncoder);fillSelect($('vae'),[],settings.animaVae);
-    fillSelect($('sampler'),[],settings.sampler);fillSelect($('scheduler'),[],settings.scheduler);
-    $('steps').value=settings.steps;$('cfg').value=settings.cfg;
-    $('animaDimensions').value=settings.animaDimensions||'';
-    $('quality').value=settings.steps===26?'fast':settings.steps===30?'balanced':settings.steps===36?'quality':'custom';
-    $('positivePrefix').value=settings.positivePromptPrefix||'';$('positiveSuffix').value=settings.positivePromptSuffix||'';
-    $('negativePrefix').value=settings.negativePromptPrefix||'';$('negativeSuffix').value=settings.negativePromptSuffix||'';
-    renderProfiles();$('topStatus').textContent='설정 파일: '+b.configPath;
+    const b=await api('/api/setup/settings');
+    applySettingsToForm(b.settings);
+    $('topStatus').textContent='설정 파일: '+b.configPath;
     probe();loadWayward();
   }catch(e){$('topStatus').textContent='설정 로드 실패';$('probeStatus').textContent=e.message;$('probeStatus').className='status err'}
 }
