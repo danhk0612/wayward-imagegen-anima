@@ -318,6 +318,7 @@ function setupOptionsFromInfo(info: Awaited<ReturnType<ComfyClient['objectInfo']
 
 function imageFormatCounts(root: string): Record<string, number> {
   const counts: Record<string, number> = {}
+  const mediaExtensions = new Set(['.png', '.webp', '.jpg', '.jpeg', '.gif', '.mp4', '.webm', '.mov'])
   const walk = (dir: string): void => {
     let entries: fs.Dirent[]
     try {
@@ -331,7 +332,8 @@ function imageFormatCounts(root: string): Record<string, number> {
         walk(full)
         continue
       }
-      const ext = path.extname(entry.name).toLowerCase() || '(none)'
+      const ext = path.extname(entry.name).toLowerCase()
+      if (!mediaExtensions.has(ext)) continue
       counts[ext] = (counts[ext] ?? 0) + 1
     }
   }
