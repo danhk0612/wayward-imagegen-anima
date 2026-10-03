@@ -55,6 +55,31 @@ jobs:
               } catch { }
             }
             if (-not $ready) { throw 'Compiled backend did not serve setup.html.' }
+
+            $before = Invoke-RestMethod 'http://127.0.0.1:8189/api/setup/settings'
+            $settings = $before.settings
+            $settings.steps = 31
+            $settings.characterProfiles = @{
+              test = @{
+                loras = @()
+                triggerPrompt = 'test_trigger'
+                basePrompt = 'blue hair'
+                gamePromptPrefixToStrip = ''
+                positivePromptPrefix = ''
+                positivePromptSuffix = ''
+                negativePromptPrefix = ''
+                negativePromptSuffix = ''
+              }
+            }
+            $settings.characterDirs = @('test')
+            $body = @{ settings = $settings } | ConvertTo-Json -Depth 20
+            $saved = Invoke-RestMethod 'http://127.0.0.1:8189/api/setup/settings' -Method Post -ContentType 'application/json' -Body $body
+            if ($saved.restartRequired) { throw 'Unchanged ComfyUI URL should not require restart.' }
+            if (-not $saved.appliedImmediately) { throw 'Setup changes were not applied immediately.' }
+
+            $after = Invoke-RestMethod 'http://127.0.0.1:8189/api/setup/settings'
+            if ($after.settings.steps -ne 31) { throw 'Live setup step change was not visible.' }
+            if (-not $after.settings.characterProfiles.test) { throw 'Live character profile change was not visible.' }
           }
           finally {
             try { Invoke-RestMethod 'http://127.0.0.1:8189/api/control/shutdown' -Method Post -TimeoutSec 2 | Out-Null } catch { }
