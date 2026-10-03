@@ -32,6 +32,12 @@ Wayward itself.
 After setup, normal use is simply: start ComfyUI, then double-click
 `Wayward-Anima.cmd`.
 
+For development/test installs, `scripts/install-portable-to-wayward.ps1` can
+update an existing Portable installation in place. It preserves the configured
+image/state directories (including custom relative paths) and config file,
+removes stale runtime/source files, and will only auto-stop port 8189 when it can
+prove the idle backend belongs to the target Wayward root.
+
 ## Portable layout
 
 ```text
