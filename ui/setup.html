@@ -189,6 +189,19 @@ function fillSelect(el, values, selected){
   for(const v of uniq){const o=document.createElement('option');o.value=v;o.textContent=v;el.append(o);}
   if(selected)el.value=selected;
 }
+function chooseDetected(values,current,patterns=[]){
+  const list=values||[];
+  if(current&&list.includes(current))return current;
+  const matches=[];
+  for(const p of patterns){
+    for(const item of list){
+      if(String(item).toLowerCase().includes(String(p).toLowerCase())&&!matches.includes(item))matches.push(item);
+    }
+  }
+  if(matches.length===1)return matches[0];
+  if(list.length===1)return list[0];
+  return current||'';
+}
 function escId(v){return String(v).toLowerCase().trim().replace(/[^a-z0-9_-]+/g,'-').replace(/^-+|-+$/g,'').slice(0,64);}
 function normalizedTag(v){return String(v).trim().toLowerCase().replace(/\s+/g,'_');}
 function loraStem(v){
@@ -616,11 +629,30 @@ async function probe(){
     const b=await api('/api/setup/comfy-options?url='+encodeURIComponent($('comfyUrl').value.trim()));
     options=b.options||options;
     const d=b.system?.device||'장치 정보 없음';
-    $('probeStatus').textContent=`연결됨 · ComfyUI ${b.system?.version||'?'} · ${d}`;
-    $('probeStatus').className='status ok';
-    fillSelect($('animaModel'),options.diffusionModels,$('animaModel').value||settings.animaModel);
-    fillSelect($('textEncoder'),options.textEncoders,$('textEncoder').value||settings.animaTextEncoder);
-    fillSelect($('vae'),options.vaes,$('vae').value||settings.animaVae);
+    const compat=b.compatibility?.nativeAnima
+      ? 'native Anima 필수 노드 확인됨'
+      : '필수 노드 부족: '+((b.compatibility?.missingNodes||[]).join(', ')||'확인 불가');
+    $('probeStatus').textContent=`연결됨 · ComfyUI ${b.system?.version||'?'} · ${d}\n${compat}`;
+    $('probeStatus').className='status '+(b.compatibility?.nativeAnima?'ok':'err');
+
+    const model=chooseDetected(
+      options.diffusionModels,
+      $('animaModel').value||settings.animaModel,
+      ['waianima','anima-base','anima']
+    );
+    const encoder=chooseDetected(
+      options.textEncoders,
+      $('textEncoder').value||settings.animaTextEncoder,
+      ['qwen_3_06b_base','qwen3_06b','qwen']
+    );
+    const vae=chooseDetected(
+      options.vaes,
+      $('vae').value||settings.animaVae,
+      ['qwen_image_vae','qwen']
+    );
+    fillSelect($('animaModel'),options.diffusionModels,model);
+    fillSelect($('textEncoder'),options.textEncoders,encoder);
+    fillSelect($('vae'),options.vaes,vae);
     fillSelect($('sampler'),options.samplers,$('sampler').value||settings.sampler);
     fillSelect($('scheduler'),options.schedulers,$('scheduler').value||settings.scheduler);
     for(const sel of document.querySelectorAll('.lname')){
