@@ -1,5 +1,8 @@
-import type { BatchStatus } from '../src/batch/queue.ts'
-import { evaluateIdleShutdown } from '../src/runtime/activity.ts'
+import type { BatchQueue, BatchStatus } from '../src/batch/queue.ts'
+import type { Config } from '../src/config.ts'
+import type { JobRunner } from '../src/comfy/jobRunner.ts'
+import type { ComfyClient } from '../src/comfy/client.ts'
+import { evaluateIdleShutdown, RuntimeActivity } from '../src/runtime/activity.ts'
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message)
@@ -90,3 +93,65 @@ result = evaluateIdleShutdown({
 assert(!result.eligible && result.remainingSeconds === 300, 'timeout countdown should use the last game request time')
 
 console.log('Idle shutdown smoke test passed')
+
+
+function makeRuntime(
+  batchStatus: BatchStatus,
+  activeJobs: Array<{ promptId: string; talentName: string; status: string; bulk?: boolean }> = [],
+) {
+  let now = 0
+  let shutdowns = 0
+  const config = {
+    configFilePath: '/tmp/wayward/wayward-imagegen/wayward-imagegen.config.json',
+    idleShutdownEnabled: true,
+    idleShutdownMinutes: 10,
+  } as Config
+  const batchStub = { status: () => batchStatus } as unknown as BatchQueue
+  const jobsStub = {
+    activeJobs: () => activeJobs,
+    pendingSubmissionCount: () => 0,
+  } as unknown as JobRunner
+  const comfyStub = {
+    ownedQueueState: async () => ({ reachable: true, pending: 0, running: 0 }),
+  } as unknown as ComfyClient
+  const runtime = new RuntimeActivity(
+    config,
+    batchStub,
+    jobsStub,
+    comfyStub,
+    () => { shutdowns++ },
+    { version: 'test', now: () => now, checkIntervalMs: 60_000 },
+  )
+  return {
+    runtime,
+    advanceTo: (value: number) => { now = value },
+    shutdowns: () => shutdowns,
+  }
+}
+
+const idleRuntime = makeRuntime(batch())
+idleRuntime.advanceTo(700_000)
+await idleRuntime.runtime.checkNow()
+assert(idleRuntime.shutdowns() === 1, 'runtime should invoke shutdown after a proven idle timeout')
+
+const activeBatchRuntime = makeRuntime(batch({
+  jobId: 'overnight',
+  running: true,
+  total: 100,
+  done: 20,
+}))
+activeBatchRuntime.advanceTo(700_000)
+await activeBatchRuntime.runtime.checkNow()
+assert(activeBatchRuntime.shutdowns() === 0, 'active batch must prevent runtime auto shutdown')
+
+const pausedBatchRuntime = makeRuntime(batch({
+  jobId: 'overnight',
+  paused: true,
+  total: 100,
+  done: 20,
+}))
+pausedBatchRuntime.advanceTo(700_000)
+await pausedBatchRuntime.runtime.checkNow()
+assert(pausedBatchRuntime.shutdowns() === 0, 'paused incomplete batch must prevent runtime auto shutdown')
+
+console.log('Runtime idle shutdown smoke test passed')
