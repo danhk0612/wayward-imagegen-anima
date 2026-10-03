@@ -40,6 +40,7 @@ foreach ($file in @(
   "README.md",
   "ANIMA_SETUP.md",
   "DISTRIBUTION.md",
+  "CHANGELOG.md",
   "wayward-imagegen.config.anima.example.json"
 )) {
   $source = Join-Path $RepoRoot $file
