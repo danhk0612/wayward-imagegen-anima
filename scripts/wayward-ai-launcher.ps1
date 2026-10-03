@@ -173,3 +173,7 @@ if (-not (Test-Http ($comfyUrl + "/system_stats") 3)) {
 }
 
 Start-Process $gameEntry
+
+Write-Host ""
+Write-Host "Wayward opened. The image backend keeps running after the game/browser closes." -ForegroundColor Cyan
+Write-Host "Use Wayward-Anima-Server.cmd to check status or stop/restart the hidden backend."
