@@ -18,9 +18,12 @@ Wayward itself.
 3. Double-click `Wayward-Anima.cmd`.
 4. On first run, the browser setup wizard opens at
    `http://127.0.0.1:8189/setup.html`.
-5. Choose the Anima diffusion model, text encoder and VAE reported by ComfyUI.
-6. Add a Wayward character ID, choose its LoRA(s), and enter the trigger/base
-   prompts.
+5. Use local auto-discovery or enter the ComfyUI URL manually. The setup UI
+   reads model/encoder/VAE/LoRA filenames from ComfyUI; absolute filesystem
+   paths are not required.
+6. Add a Wayward character ID and choose its LoRA(s). You may paste the LoRA
+   author's recommended prompt and let the setup assistant separate LoRA
+   syntax, strength, trigger and stable base tags.
 7. Optionally disable that character's downloaded static image pack so newly
    generated images become authoritative.
 8. Save. Most settings apply immediately. Changing the ComfyUI URL requires one
@@ -71,7 +74,10 @@ Lite additionally requires Bun in PATH.
 
 Routine updates preserve the existing config, generated art, image cache, batch
 state and static-image-pack state. Character art is only reset when an explicit
-reset operation is used.
+reset operation is used. The development helper
+`scripts/install-portable-to-wayward.ps1` also performs a safe in-place
+Portable update by replacing runtime files while verifying that config and
+generated-image data remain unchanged.
 
 Static image packs are disabled by moving character-specific manifests and art
 under `_disabled-imagepacks/<character>/`, not by deleting them. They can be
