@@ -92,8 +92,9 @@ The setup wizard can:
 - safely cancel backend-owned ComfyUI work and shut down the backend.
 
 Settings are written to `wayward-imagegen.config.json`. Existing settings are
-backed up automatically before the UI writes a replacement. A backend restart
-is required after changing generation settings.
+backed up automatically before the UI writes a replacement. Model, LoRA, prompt,
+quality and resolution changes apply immediately; only a changed ComfyUI URL
+requires a backend restart.
 
 ### Command-line setup
 
@@ -108,12 +109,16 @@ bun src/cli.ts
 
 The default Wayward-facing address is `http://127.0.0.1:8189`.
 
-### Lite distribution
+### Release packages
 
-`scripts/build-lite-release.ps1` creates a small ZIP containing only the
-runtime backend, browser UI, MIT/NOTICE files and the one-click launcher.
-ComfyUI, models, LoRAs, Wayward, generated images and development artifacts are
-not bundled. See [DISTRIBUTION.md](./DISTRIBUTION.md).
+Two Windows packages are supported:
+
+- **Portable** — recommended for normal users; includes a compiled backend and
+  does not require Bun at runtime.
+- **Lite** — smaller source package for users who already have Bun installed.
+
+Neither package bundles ComfyUI, models, LoRAs, Wayward, generated images or
+development artifacts. See [DISTRIBUTION.md](./DISTRIBUTION.md).
 
 ## Renderer backend status
 
