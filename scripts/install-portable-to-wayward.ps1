@@ -9,16 +9,54 @@ $ErrorActionPreference = 'Stop'
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $GameRoot = (Resolve-Path $GameRoot).Path
 $indexHtml = Join-Path $GameRoot 'index.html'
+$targetBackend = Join-Path $GameRoot 'wayward-imagegen'
+$targetPs1 = Join-Path $GameRoot 'Wayward-Anima.ps1'
+$targetCmd = Join-Path $GameRoot 'Wayward-Anima.cmd'
 
 if (-not (Test-Path $indexHtml)) {
   throw "Wayward index.html not found: $indexHtml"
 }
 
-# Do not silently take over the fixed Wayward image-server port. This prevents
-# a test install/update from accidentally stopping a live production session.
+# If the backend currently using 8189 belongs to this exact Wayward root and is
+# idle, shut it down cleanly for the update. Never stop a different install.
 $listener = Get-NetTCPConnection -LocalPort 8189 -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
 if ($listener) {
-  throw "Port 8189 is already in use by PID $($listener.OwningProcess). Stop the current Wayward image backend before installing/updating."
+  $sameTarget = $false
+  try {
+    $running = Invoke-RestMethod 'http://127.0.0.1:8189/api/setup/settings' -TimeoutSec 3
+    $runningConfig = [System.IO.Path]::GetFullPath([string]$running.configPath)
+    $targetConfig = [System.IO.Path]::GetFullPath((Join-Path $targetBackend 'wayward-imagegen.config.json'))
+    $sameTarget = [string]::Equals($runningConfig, $targetConfig, [System.StringComparison]::OrdinalIgnoreCase)
+  }
+  catch {
+    $sameTarget = $false
+  }
+
+  if (-not $sameTarget) {
+    throw "Port 8189 is in use by another/unknown backend (PID $($listener.OwningProcess)). Stop that backend first; this installer will not touch a different Wayward environment."
+  }
+
+  try {
+    $control = Invoke-RestMethod 'http://127.0.0.1:8189/api/control/status' -TimeoutSec 3
+    $active = @($control.activeJobs).Count
+    $batchRunning = [bool]$control.batch.running
+    if ($active -gt 0 -or $batchRunning) {
+      throw "The target backend is generating work (active jobs: $active, batch running: $batchRunning). Pause/wait for it before updating."
+    }
+
+    Write-Host '== Stop idle target backend for update ==' -ForegroundColor Cyan
+    Invoke-RestMethod 'http://127.0.0.1:8189/api/control/shutdown' -Method Post -TimeoutSec 5 | Out-Null
+    $deadline = (Get-Date).AddSeconds(15)
+    do {
+      Start-Sleep -Milliseconds 300
+      $stillListening = Get-NetTCPConnection -LocalPort 8189 -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
+      if (-not $stillListening) { break }
+    } while ((Get-Date) -lt $deadline)
+    if ($stillListening) { throw 'Target backend did not release port 8189 within 15 seconds.' }
+  }
+  catch {
+    throw $_
+  }
 }
 
 function Resolve-RuntimePath([string]$BackendRoot, [string]$Configured, [string]$Fallback) {
@@ -107,9 +145,6 @@ $stage = Get-ChildItem $testDist -Directory -Filter 'Wayward-Anima-ImageGen-Port
 if (-not $stage) { throw 'Portable staging directory was not created.' }
 
 $sourceBackend = Join-Path $stage.FullName 'wayward-imagegen'
-$targetBackend = Join-Path $GameRoot 'wayward-imagegen'
-$targetPs1 = Join-Path $GameRoot 'Wayward-Anima.ps1'
-$targetCmd = Join-Path $GameRoot 'Wayward-Anima.cmd'
 $existing = (Test-Path $targetBackend) -or (Test-Path $targetPs1) -or (Test-Path $targetCmd)
 
 if ($FreshPlugin) {
