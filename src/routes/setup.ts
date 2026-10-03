@@ -248,6 +248,30 @@ function readRawConfig(file: string): Record<string, unknown> {
   }
 }
 
+function configBackupDir(config: Config): string {
+  return path.join(config.stateDir, 'config-backups')
+}
+
+function backupCurrentConfig(config: Config): string | null {
+  const file = config.configFilePath
+  if (!fs.existsSync(file)) return null
+
+  const backups = configBackupDir(config)
+  fs.mkdirSync(backups, { recursive: true })
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-')
+  const backupPath = path.join(backups, `wayward-imagegen.config.${stamp}.json`)
+  fs.copyFileSync(file, backupPath)
+  return backupPath
+}
+
+function writeRawConfig(file: string, raw: Record<string, unknown>): void {
+  fs.mkdirSync(path.dirname(file), { recursive: true })
+  const temp = `${file}.tmp-${process.pid}`
+  const text = JSON.stringify(raw, null, 2) + '\n'
+  fs.writeFileSync(temp, text, { encoding: 'utf8' })
+  fs.renameSync(temp, file)
+}
+
 function writeSettings(config: Config, settings: SetupSettings): { backupPath: string | null } {
   const file = config.configFilePath
   const raw = readRawConfig(file)
@@ -262,23 +286,8 @@ function writeSettings(config: Config, settings: SetupSettings): { backupPath: s
   raw.lora = ''
   raw.loraStrength = 1
 
-  const dir = path.dirname(file)
-  fs.mkdirSync(dir, { recursive: true })
-
-  let backupPath: string | null = null
-  if (fs.existsSync(file)) {
-    const backups = path.join(config.stateDir, 'config-backups')
-    fs.mkdirSync(backups, { recursive: true })
-    const stamp = new Date().toISOString().replace(/[:.]/g, '-')
-    backupPath = path.join(backups, `wayward-imagegen.config.${stamp}.json`)
-    fs.copyFileSync(file, backupPath)
-  }
-
-  const temp = `${file}.tmp-${process.pid}`
-  const text = JSON.stringify(raw, null, 2) + '\n'
-  fs.writeFileSync(temp, text, { encoding: 'utf8' })
-  fs.renameSync(temp, file)
-
+  const backupPath = backupCurrentConfig(config)
+  writeRawConfig(file, raw)
   return { backupPath }
 }
 
