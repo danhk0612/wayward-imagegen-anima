@@ -15,6 +15,8 @@ import { Router, sendJson, HttpError, type RequestContext } from '../http/router
 import { readJson } from '../http/body.ts'
 import { buildComfyPrompt } from '../comfy/workflows/index.ts'
 import { webpAvailable } from '../comfy/media.ts'
+import { extractCharacterName } from '../naming.ts'
+import { analysePromptPrefix } from '../setup/promptTools.ts'
 
 const SETUP_BODY_LIMIT = 2 * 1024 * 1024
 const MAX_PROMPT_LENGTH = 100_000
@@ -492,6 +494,77 @@ export function registerSetupRoutes(router: Router, config: Config, cache: Cache
       restartRequired,
       appliedImmediately: !restartRequired,
       settings,
+    })
+  })
+
+  router.get('/api/setup/comfy-discover', async ctx => {
+    requireLocal(ctx)
+
+    const urls: string[] = []
+    const add = (url: string): void => {
+      const normalized = url.replace(/\/+$/, '')
+      if (!urls.includes(normalized)) urls.push(normalized)
+    }
+
+    add(config.comfyUrl)
+    for (const port of [8188, 8187, 8186, 8190, 8191, 8192, 8288, 8289]) {
+      if (port === config.port) continue
+      add(`http://127.0.0.1:${port}`)
+    }
+
+    const found: Array<{ url: string; version: unknown; device: unknown }> = []
+    await Promise.all(urls.map(async url => {
+      const comfy = new ComfyClient(url)
+      if (!await comfy.isReachable(900)) return
+      const stats = await comfy.systemStats()
+      if (!stats) return
+      const system = (stats.system ?? {}) as Record<string, unknown>
+      const devices = Array.isArray(stats.devices) ? stats.devices : []
+      const device = (devices[0] ?? {}) as Record<string, unknown>
+      found.push({
+        url,
+        version: system.comfyui_version ?? null,
+        device: device.name ?? null,
+      })
+    }))
+
+    found.sort((a, b) => {
+      if (a.url === config.comfyUrl) return -1
+      if (b.url === config.comfyUrl) return 1
+      return a.url.localeCompare(b.url)
+    })
+
+    sendJson(ctx.res, 200, {
+      found,
+      note: 'Automatic discovery scans common local ComfyUI ports only. Remote/custom URLs remain available through manual entry.',
+    })
+  })
+
+  router.get('/api/setup/prompt-analysis', ctx => {
+    requireLocal(ctx)
+    const characterId = (ctx.query.get('characterId') ?? '').trim().toLowerCase()
+    if (!CHARACTER_ID.test(characterId)) throw new HttpError(400, 'invalid characterId')
+
+    const samples = Object.values(cache.entries)
+      .filter(entry =>
+        extractCharacterName(entry.talentName, config.characterDirs) === characterId
+        && typeof entry.prompt === 'string'
+        && entry.prompt.trim().length > 0)
+      .sort((a, b) => b.createdAt - a.createdAt)
+      .map(entry => entry.prompt)
+
+    const analysis = analysePromptPrefix(samples)
+    const configured = config.characterProfiles[characterId]?.gamePromptPrefixToStrip ?? ''
+    sendJson(ctx.res, 200, {
+      characterId,
+      ...analysis,
+      configuredPrefix: configured,
+      configuredMatchesLatest: configured
+        ? analysis.latestPrompt.toLowerCase().startsWith(configured.trim().replace(/,+\s*$/, '').toLowerCase())
+        : null,
+      note: analysis.sampleCount < 2
+        ? 'At least two distinct rendered game prompts are needed for a safe automatic prefix suggestion.'
+        : 'Candidate prefix is the longest leading comma-tag sequence shared by recent distinct game prompts.',
     })
   })
 
