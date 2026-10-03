@@ -40,6 +40,7 @@ Completed:
 - Runtime integration smoke verifies on-demand generation and pre-generation for a character with no static image pack.
 - Runtime integration smoke verifies cancelling a running backend-owned batch render leaves completed generated art unchanged.
 - Full HTTP shutdown lifecycle smoke verifies an active backend-owned batch render is interrupted, the server closes, and previously completed art remains unchanged.
+- External Windows server manager reports the hidden backend PID/status/batch progress and can start/stop/restart/open setup without launching the game; cross-install port ownership is guarded.
 
 ## Before 0.2.0 release
 
