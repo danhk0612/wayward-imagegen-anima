@@ -98,7 +98,8 @@ The setup wizard can:
 - import/export setup JSON and restore automatic config backups,
 - inspect image-library size/formats/WebP availability and set a disk cap,
 - pause/resume/clear pre-generation work,
-- safely cancel backend-owned ComfyUI work and shut down the backend.
+- safely cancel backend-owned ComfyUI work and shut down the backend,
+- use `Wayward-Anima-Server.cmd` outside the browser to check the hidden backend status or start/stop/restart it after the game has closed.
 
 Settings are written to `wayward-imagegen.config.json`. Existing settings are
 backed up automatically before the UI writes a replacement. Model, LoRA, prompt,
