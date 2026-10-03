@@ -42,13 +42,13 @@ $gameItem = New-Object System.Windows.Forms.ToolStripMenuItem
 $exitItem = New-Object System.Windows.Forms.ToolStripMenuItem
 $timer = New-Object System.Windows.Forms.Timer
 
-$statusItem.Text = "상태: 확인 중"
-$startItem.Text = "서버 시작"
-$stopItem.Text = "서버 종료"
-$restartItem.Text = "서버 재시작"
-$setupItem.Text = "설정 화면 열기"
-$gameItem.Text = "Wayward 실행"
-$exitItem.Text = "트레이 종료"
+$statusItem.Text = "Status: checking"
+$startItem.Text = "Start server"
+$stopItem.Text = "Stop server"
+$restartItem.Text = "Restart server"
+$setupItem.Text = "Open setup"
+$gameItem.Text = "Start Wayward"
+$exitItem.Text = "Exit tray"
 
 $null = $menu.Items.Add($statusItem)
 $null = $menu.Items.Add((New-Object System.Windows.Forms.ToolStripSeparator))
@@ -63,7 +63,7 @@ $null = $menu.Items.Add($exitItem)
 
 $notify.ContextMenuStrip = $menu
 $notify.Icon = [System.Drawing.SystemIcons]::Application
-$notify.Text = "Wayward Anima: 확인 중"
+$notify.Text = "Wayward Anima: checking"
 $notify.Visible = $true
 
 $script:lastStatus = $null
@@ -79,8 +79,8 @@ function Get-Status {
   if (-not $port) {
     return [PSCustomObject]@{
       Kind = "stopped"
-      Label = "중지됨"
-      Detail = "AI backend가 실행 중이 아닙니다."
+      Label = "stopped"
+      Detail = "AI backend is not running."
       Owned = $false
       Control = $null
     }
@@ -93,8 +93,8 @@ function Get-Status {
     if (-not $owned) {
       return [PSCustomObject]@{
         Kind = "foreign"
-        Label = "다른 설치가 8189 사용 중"
-        Detail = "PID $($port.OwningProcess)`nConfig: $reported`n이 트레이에서는 해당 서버를 종료하지 않습니다."
+        Label = "port 8189 belongs to another install"
+        Detail = "PID $($port.OwningProcess)`nConfig: $reported`nThis tray will not stop that server."
         Owned = $false
         Control = $control
       }
@@ -102,33 +102,33 @@ function Get-Status {
 
     $batch = $control.batch
     $idle = $control.idleShutdown
-    $idleLine = "자동 종료: 꺼짐"
+    $idleLine = "Auto shutdown: OFF"
     if ($idle.enabled) {
       if ($idle.blockedBy.Count -gt 0) {
-        $idleLine = "자동 종료: 대기 (" + ($idle.blockedBy -join ", ") + ")"
+        $idleLine = "Auto shutdown: waiting (" + ($idle.blockedBy -join ", ") + ")"
       }
       elseif ($idle.remainingSeconds -gt 0) {
-        $idleLine = "자동 종료: 약 $($idle.remainingSeconds)초 후"
+        $idleLine = "Auto shutdown: about $($idle.remainingSeconds)s remaining"
       }
       else {
-        $idleLine = "자동 종료: 조건 충족"
+        $idleLine = "Auto shutdown: eligible"
       }
     }
     $last = [DateTimeOffset]::FromUnixTimeMilliseconds([long]$control.lastGameRequestAt).LocalDateTime
     $detail = @(
-      "상태: $($control.state)",
+      "State: $($control.state)",
       "PID: $($control.instance.pid)",
-      "마지막 게임 요청: $($last.ToString('yyyy-MM-dd HH:mm:ss'))",
-      "Batch: $($batch.done)/$($batch.total) · running=$($batch.running) · paused=$($batch.paused)",
+      "Last game request: $($last.ToString('yyyy-MM-dd HH:mm:ss'))",
+      "Batch: $($batch.done)/$($batch.total) / running=$($batch.running) / paused=$($batch.paused)",
       "AI jobs: $(@($control.activeJobs).Count)",
       $idleLine
     ) -join "`n"
     return [PSCustomObject]@{
       Kind = [string]$control.state
       Label = switch ([string]$control.state) {
-        "generating" { "생성 중" }
-        "paused" { "일시정지" }
-        default { "실행 중" }
+        "generating" { "generating" }
+        "paused" { "paused" }
+        default { "running" }
       }
       Detail = $detail
       Owned = $true
@@ -138,8 +138,8 @@ function Get-Status {
   catch {
     return [PSCustomObject]@{
       Kind = "foreign"
-      Label = "8189 응답 확인 실패"
-      Detail = "PID $($port.OwningProcess)`n$($_.Exception.Message)`n소유권을 확인할 수 없어 종료하지 않습니다."
+      Label = "port 8189 probe failed"
+      Detail = "PID $($port.OwningProcess)`n$($_.Exception.Message)`nOwnership could not be verified, so this tray will not stop it."
       Owned = $false
       Control = $null
     }
@@ -149,7 +149,7 @@ function Get-Status {
 function Update-Tray {
   $s = Get-Status
   $script:lastStatus = $s
-  $statusItem.Text = "상태: " + $s.Label
+  $statusItem.Text = "Status: " + $s.Label
   $notify.Text = ("Wayward Anima: " + $s.Label)
   if ($notify.Text.Length -gt 63) { $notify.Text = $notify.Text.Substring(0, 63) }
 
@@ -170,7 +170,7 @@ function Update-Tray {
 function Invoke-ManagerAction([string]$Action) {
   if (-not (Test-Path $manager)) {
     [System.Windows.Forms.MessageBox]::Show(
-      "Wayward-Anima-Server.ps1을 찾을 수 없습니다.`n$manager",
+      "Wayward-Anima-Server.ps1 was not found.`n$manager",
       "Wayward Anima",
       "OK",
       "Error"
@@ -182,7 +182,7 @@ function Invoke-ManagerAction([string]$Action) {
   if ($LASTEXITCODE -ne 0) {
     [System.Windows.Forms.MessageBox]::Show(
       (($output | Out-String).Trim()),
-      "Wayward Anima - $Action 실패",
+      "Wayward Anima - $Action failed",
       "OK",
       "Error"
     ) | Out-Null
@@ -194,7 +194,7 @@ $statusItem.add_Click({
   Update-Tray
   [System.Windows.Forms.MessageBox]::Show(
     $script:lastStatus.Detail,
-    "Wayward Anima 서버 상태",
+    "Wayward Anima server status",
     "OK",
     "Information"
   ) | Out-Null
@@ -203,7 +203,7 @@ $notify.add_DoubleClick({
   Update-Tray
   [System.Windows.Forms.MessageBox]::Show(
     $script:lastStatus.Detail,
-    "Wayward Anima 서버 상태",
+    "Wayward Anima server status",
     "OK",
     "Information"
   ) | Out-Null
