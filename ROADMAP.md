@@ -26,6 +26,7 @@ Completed:
 - Setup JSON import/export and automatic config-backup restore UI.
 - Image-library usage/format/WebP status plus configurable disk-cap control.
 - Sandbox CI verifies static image-pack disable/restore without touching a live library.
+- Disposable Portable-install helper for clean Wayward first-run testing.
 
 ## Before 0.2.0 release
 
