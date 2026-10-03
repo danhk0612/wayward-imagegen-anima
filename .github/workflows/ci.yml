@@ -44,23 +44,30 @@ jobs:
           $root = Join-Path $env:RUNNER_TEMP 'Wayward-safe-update'
           if (Test-Path $root) { Remove-Item $root -Recurse -Force }
           $backend = Join-Path $root 'wayward-imagegen'
-          New-Item -ItemType Directory -Path (Join-Path $backend 'images\illustrious\characters\elena') -Force | Out-Null
+          $art = Join-Path $backend 'art-library\illustrious\characters\elena'
+          $state = Join-Path $backend 'runtime-state'
+          New-Item -ItemType Directory -Path $art -Force | Out-Null
+          New-Item -ItemType Directory -Path $state -Force | Out-Null
           New-Item -ItemType Directory -Path (Join-Path $backend 'src') -Force | Out-Null
           Set-Content -Path (Join-Path $root 'index.html') -Value '<html><body>fixture</body></html>' -Encoding UTF8
-          Set-Content -Path (Join-Path $backend 'wayward-imagegen.config.json') -Value '{"imagePreset":"anima","marker":"preserve-me"}' -Encoding UTF8
-          Set-Content -Path (Join-Path $backend 'images\illustrious\characters\elena\existing.png') -Value 'existing-image' -Encoding UTF8
+          Set-Content -Path (Join-Path $backend 'wayward-imagegen.config.json') -Value '{"imagePreset":"anima","imagesDir":"art-library","stateDir":"runtime-state","marker":"preserve-me"}' -Encoding UTF8
+          Set-Content -Path (Join-Path $art 'existing.png') -Value 'existing-image' -Encoding UTF8
+          Set-Content -Path (Join-Path $state 'batch.json') -Value '{"paused":true}' -Encoding UTF8
           Set-Content -Path (Join-Path $backend 'src\stale.ts') -Value '// stale portable source' -Encoding UTF8
           Set-Content -Path (Join-Path $root 'Wayward-Anima.cmd') -Value '@echo stale' -Encoding ASCII
 
           $beforeConfig = (Get-FileHash (Join-Path $backend 'wayward-imagegen.config.json') -Algorithm SHA256).Hash
-          $beforeImage = (Get-FileHash (Join-Path $backend 'images\illustrious\characters\elena\existing.png') -Algorithm SHA256).Hash
+          $beforeImage = (Get-FileHash (Join-Path $art 'existing.png') -Algorithm SHA256).Hash
+          $beforeState = (Get-FileHash (Join-Path $state 'batch.json') -Algorithm SHA256).Hash
 
           ./scripts/install-portable-to-wayward.ps1 -GameRoot $root
 
           $afterConfig = (Get-FileHash (Join-Path $backend 'wayward-imagegen.config.json') -Algorithm SHA256).Hash
-          $afterImage = (Get-FileHash (Join-Path $backend 'images\illustrious\characters\elena\existing.png') -Algorithm SHA256).Hash
+          $afterImage = (Get-FileHash (Join-Path $art 'existing.png') -Algorithm SHA256).Hash
+          $afterState = (Get-FileHash (Join-Path $state 'batch.json') -Algorithm SHA256).Hash
           if ($beforeConfig -ne $afterConfig) { throw 'Portable updater changed config.' }
-          if ($beforeImage -ne $afterImage) { throw 'Portable updater changed generated image.' }
+          if ($beforeImage -ne $afterImage) { throw 'Portable updater changed configured image library.' }
+          if ($beforeState -ne $afterState) { throw 'Portable updater changed configured state directory.' }
           if (Test-Path (Join-Path $backend 'src')) { throw 'Portable updater left stale source directory.' }
           if (-not (Test-Path (Join-Path $backend 'wayward-imagegen.exe'))) { throw 'Portable updater did not install compiled backend.' }
 
