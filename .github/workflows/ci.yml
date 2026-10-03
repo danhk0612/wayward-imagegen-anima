@@ -66,7 +66,29 @@ jobs:
           if (-not (Test-Path $tray) -or -not (Test-Path $trayCmd)) { throw 'Tray manager entry points are missing.' }
 
           & $manager -Action Status -GameRoot $stage.FullName
-          & $manager -Action Start -GameRoot $stage.FullName
+
+          # Reproduce the field report: an older backend answers the game and
+          # old control API but has no runtime instance identity. The manager
+          # must recover ownership from /api/setup/settings and restart it
+          # instead of classifying it as an unknown/foreign process.
+          $legacyConfig = Join-Path $stage.FullName 'wayward-imagegen\wayward-imagegen.config.json'
+          $bunExe = (Get-Command bun).Source
+          $legacy = Start-Process -FilePath $bunExe -ArgumentList @('scripts/legacy-backend-stub.ts','--config',$legacyConfig) -WorkingDirectory $PWD -PassThru -WindowStyle Hidden
+          $legacyReady = $false
+          for ($i = 0; $i -lt 40; $i++) {
+            Start-Sleep -Milliseconds 100
+            try {
+              $legacyStatus = Invoke-RestMethod 'http://127.0.0.1:8189/api/control/status' -TimeoutSec 1
+              if (-not $legacyStatus.instance) { $legacyReady = $true; break }
+            } catch { }
+          }
+          if (-not $legacyReady) {
+            if (-not $legacy.HasExited) { Stop-Process -Id $legacy.Id -Force }
+            throw 'Legacy backend fixture did not start.'
+          }
+
+          & $manager -Action Status -GameRoot $stage.FullName
+          & $manager -Action Restart -GameRoot $stage.FullName
 
           $ready = $false
           for ($i = 0; $i -lt 40; $i++) {
