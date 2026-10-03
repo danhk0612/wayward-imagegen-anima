@@ -466,6 +466,53 @@ export function registerSetupRoutes(router: Router, config: Config, cache: Cache
     })
   })
 
+  router.get('/api/setup/backups', ctx => {
+    requireLocal(ctx)
+    const dir = configBackupDir(config)
+    let backups: Array<{ name: string; bytes: number; modifiedAt: string }> = []
+    try {
+      backups = fs.readdirSync(dir, { withFileTypes: true })
+        .filter(entry => entry.isFile() && /^wayward-imagegen\.config\.[0-9TZ-]+\.json$/.test(entry.name))
+        .map(entry => {
+          const full = path.join(dir, entry.name)
+          const stat = fs.statSync(full)
+          return {
+            name: entry.name,
+            bytes: stat.size,
+            modifiedAt: stat.mtime.toISOString(),
+          }
+        })
+        .sort((a, b) => b.modifiedAt.localeCompare(a.modifiedAt))
+        .slice(0, 50)
+    } catch {
+      backups = []
+    }
+    sendJson(ctx.res, 200, { backups })
+  })
+
+  router.post('/api/setup/backups/restore', async ctx => {
+    requireLocal(ctx)
+    const body = await readJson<{ name?: string }>(ctx.req, 64 * 1024)
+    const name = typeof body.name === 'string' ? body.name.trim() : ''
+    if (!/^wayward-imagegen\.config\.[0-9TZ-]+\.json$/.test(name) || path.basename(name) !== name) {
+      throw new HttpError(400, 'invalid config backup name')
+    }
+
+    const source = path.join(configBackupDir(config), name)
+    if (!fs.existsSync(source)) throw new HttpError(404, 'config backup not found')
+    const restored = readRawConfig(source)
+    const backupPath = backupCurrentConfig(config)
+    writeRawConfig(config.configFilePath, restored)
+
+    sendJson(ctx.res, 200, {
+      ok: true,
+      restoredFrom: name,
+      previousConfigBackup: backupPath,
+      restartRequired: true,
+      note: 'Restart wayward-imagegen to load the restored full configuration.',
+    })
+  })
+
   router.post('/api/setup/validate', async ctx => {
     requireLocal(ctx)
     const body = await readJson<{ settings?: unknown }>(ctx.req, SETUP_BODY_LIMIT)
