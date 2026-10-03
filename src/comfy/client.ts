@@ -234,6 +234,22 @@ export class ComfyClient {
       return null
     }
   }
+  /** Read safetensors metadata through ComfyUI when the server supports it. */
+  async metadata(folderName: string, filename: string): Promise<Record<string, unknown> | null> {
+    try {
+      const url = `${this.baseUrl}/view_metadata/${encodeURIComponent(folderName)}?filename=${encodeURIComponent(filename)}`
+      const res = await fetch(url, { signal: AbortSignal.timeout(8000) })
+      if (!res.ok) return null
+      const body = await res.json()
+      return body && typeof body === 'object' && !Array.isArray(body)
+        ? body as Record<string, unknown>
+        : null
+    } catch {
+      return null
+    }
+  }
+
+
 
   /**
    * Every node class this ComfyUI has, and what each one accepts.
