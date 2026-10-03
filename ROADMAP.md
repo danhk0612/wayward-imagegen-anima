@@ -25,13 +25,13 @@ Completed:
 - Optional global/style LoRAs shared by all configured characters.
 - Setup JSON import/export and automatic config-backup restore UI.
 - Image-library usage/format/WebP status plus configurable disk-cap control.
+- Sandbox CI verifies static image-pack disable/restore without touching a live library.
 
 ## Before 0.2.0 release
 
 - Test the setup wizard against a clean Wayward folder on Windows.
 - Verify first-run flow: launcher -> setup -> save -> automatic backend restart -> game.
 - Verify a character with no static image pack generates on demand and via pre-generation.
-- Verify disable/restore of a downloaded image pack is reversible with real pack files in a disposable/sandbox Wayward copy, not a live library.
 - Verify cancel/shutdown while a batch image is running without deleting completed art.
 - Check Korean UI text and error messages on Windows PowerShell 5.1.
 
