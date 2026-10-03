@@ -77,6 +77,14 @@ textarea{min-height:80px;resize:vertical}.inline{display:flex;gap:8px;align-item
       <div class="row"><label for="scheduler">Scheduler</label><select id="scheduler"></select></div>
       <div class="row"><label for="maxDiskGb">저장 공간 제한 (GB)</label><div><input id="maxDiskGb" type="number" min="0" max="100000" step="1"><div class="hint">0은 제한 없음입니다. 설정한 용량을 넘으면 새 렌더를 거부해 디스크 폭주를 막습니다.</div></div></div>
       <div class="row">
+        <label for="idleShutdownEnabled">유휴 자동 종료</label>
+        <div>
+          <label style="display:flex;align-items:center;gap:8px"><input id="idleShutdownEnabled" type="checkbox" style="width:auto"> 사용</label>
+          <div class="inline" style="margin-top:8px"><input id="idleShutdownMinutes" type="number" min="1" max="10080" step="1"><span>분 동안 게임 요청이 없으면 종료</span></div>
+          <div class="hint">기본값은 꺼짐입니다. foreground 작업, 미리 생성(batch), 일시정지된 미완료 batch, backend 소유 ComfyUI 작업이 하나라도 있으면 종료하지 않습니다. 밤새 미리 생성이 끝날 때까지는 자동 종료되지 않습니다.</div>
+        </div>
+      </div>
+      <div class="row">
         <label for="animaDimensions">해상도</label>
         <div>
           <input id="animaDimensions" list="dimensionPresets" placeholder="비우면 게임 요청 해상도 사용">
@@ -571,6 +579,8 @@ function collect(){
     sampler:$('sampler').value,
     scheduler:$('scheduler').value,
     maxDiskGb:Number($('maxDiskGb').value||0),
+    idleShutdownEnabled:$('idleShutdownEnabled').checked,
+    idleShutdownMinutes:Number($('idleShutdownMinutes').value||30),
     positivePromptPrefix:$('positivePrefix').value,
     positivePromptSuffix:$('positiveSuffix').value,
     negativePromptPrefix:$('negativePrefix').value,
@@ -593,6 +603,8 @@ function applySettingsToForm(s){
   $('animaDimensions').value=s.animaDimensions||'';
   $('quality').value=Number(s.steps)===26?'fast':Number(s.steps)===30?'balanced':Number(s.steps)===36?'quality':'custom';
   $('maxDiskGb').value=s.maxDiskGb??0;
+  $('idleShutdownEnabled').checked=s.idleShutdownEnabled===true;
+  $('idleShutdownMinutes').value=s.idleShutdownMinutes??30;
   $('positivePrefix').value=s.positivePromptPrefix||'';
   $('positiveSuffix').value=s.positivePromptSuffix||'';
   $('negativePrefix').value=s.negativePromptPrefix||'';
@@ -611,7 +623,7 @@ function buildSummary(){
   const s=collect();
   refreshTestCharacters();
   $('summary').textContent=
-    `ComfyUI: ${s.comfyUrl}\nModel: ${s.animaModel}\nEncoder: ${s.animaTextEncoder}\nVAE: ${s.animaVae}\nResolution: ${s.animaDimensions||'게임 요청 사용'}\nRender: ${s.steps} steps / CFG ${s.cfg} / ${s.sampler} / ${s.scheduler}\nDisk cap: ${s.maxDiskGb ? s.maxDiskGb + ' GB' : '제한 없음'}\nGlobal LoRA: ${s.characterLoras.length}\nCharacters: ${Object.keys(s.characterProfiles).join(', ')||'(없음)'}`;
+    `ComfyUI: ${s.comfyUrl}\nModel: ${s.animaModel}\nEncoder: ${s.animaTextEncoder}\nVAE: ${s.animaVae}\nResolution: ${s.animaDimensions||'게임 요청 사용'}\nRender: ${s.steps} steps / CFG ${s.cfg} / ${s.sampler} / ${s.scheduler}\nDisk cap: ${s.maxDiskGb ? s.maxDiskGb + ' GB' : '제한 없음'}\nIdle shutdown: ${s.idleShutdownEnabled ? s.idleShutdownMinutes + '분' : '꺼짐'}\nGlobal LoRA: ${s.characterLoras.length}\nCharacters: ${Object.keys(s.characterProfiles).join(', ')||'(없음)'}`;
 }
 $('validateSetup').onclick=async()=>{
   $('validationResult').textContent='검사 중…';
@@ -840,8 +852,16 @@ $('restoreBackup').onclick=async()=>{
 
 async function loadBatch(){
   try{
-    const b=await api('/api/batch/status');
-    $('batchStatus').textContent=`running: ${b.running}\npaused: ${b.paused}\nprogress: ${b.done} / ${b.total}\ncurrent: ${b.currentKey||'-'}\nerror: ${b.lastError||'-'}`;
+    const b=await api('/api/control/status');
+    const batch=b.batch||{};
+    const last=new Date(b.lastGameRequestAt).toLocaleString();
+    let idle='꺼짐';
+    if(b.idleShutdown?.enabled){
+      if((b.idleShutdown.blockedBy||[]).length) idle='대기 · '+b.idleShutdown.blockedBy.join(', ');
+      else if(b.idleShutdown.remainingSeconds>0) idle='약 '+b.idleShutdown.remainingSeconds+'초 후 종료 예정';
+      else idle='종료 조건 충족';
+    }
+    $('batchStatus').textContent=`server: ${b.state||'running'}\nlast game request: ${last}\nauto shutdown: ${idle}\nrunning: ${batch.running}\npaused: ${batch.paused}\nprogress: ${batch.done} / ${batch.total}\ncurrent: ${batch.currentKey||'-'}\nAI jobs: ${(b.activeJobs||[]).length}\nerror: ${batch.lastError||'-'}`;
   }catch(e){$('batchStatus').textContent='상태 확인 실패: '+e.message;}
 }
 $('pauseBatch').onclick=async()=>{await api('/api/batch/pause',{method:'POST'});loadBatch()};
@@ -860,7 +880,7 @@ $('shutdown').onclick=async()=>{
   try{
     await api('/api/control/shutdown',{method:'POST'});
     $('topStatus').textContent='AI 서버 종료 중…';
-    setTimeout(()=>{$('topStatus').textContent='AI 서버가 종료되었습니다. Wayward-AI.cmd로 다시 시작할 수 있습니다.'},700);
+    setTimeout(()=>{$('topStatus').textContent='AI 서버가 종료되었습니다. Wayward-Anima.cmd 또는 트레이에서 다시 시작할 수 있습니다.'},700);
   }catch(e){alert('종료 실패: '+e.message)}
 };
 
