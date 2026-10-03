@@ -17,6 +17,8 @@ jobs:
         run: bun scripts/smoke.ts
       - name: Browser UI smoke test
         run: bun scripts/ui-smoke.ts
+      - name: Runtime integration smoke test
+        run: bun scripts/runtime-integration-smoke.ts
       - name: Lite package smoke
         shell: pwsh
         run: ./scripts/build-lite-release.ps1
