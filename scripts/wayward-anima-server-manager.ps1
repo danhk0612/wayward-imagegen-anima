@@ -81,8 +81,8 @@ function Get-BackendIdentity {
   }
 
   try {
-    $setup = Invoke-RestMethod -Uri ($backendBase + "/api/setup/settings") -TimeoutSec 3
-    $reported = [System.IO.Path]::GetFullPath([string]$setup.configPath)
+    $control = Invoke-RestMethod -Uri ($backendBase + "/api/control/status") -TimeoutSec 3
+    $reported = [System.IO.Path]::GetFullPath([string]$control.instance.configPath)
     $expected = [System.IO.Path]::GetFullPath($configPath)
     $owned = [string]::Equals($reported, $expected, [System.StringComparison]::OrdinalIgnoreCase)
     return [PSCustomObject]@{
@@ -150,9 +150,22 @@ function Show-Status {
   if ($control) {
     $batch = $control.batch
     $active = @($control.activeJobs).Count
+    Write-Host "Runtime   : $($control.state)"
     Write-Host "Batch     : running=$($batch.running) paused=$($batch.paused) progress=$($batch.done)/$($batch.total)"
     Write-Host "Current   : $(if ($batch.currentKey) { $batch.currentKey } else { '-' })"
     Write-Host "AI jobs   : $active"
+    if ($control.idleShutdown.enabled) {
+      $blocked = @($control.idleShutdown.blockedBy)
+      if ($blocked.Count -gt 0) {
+        Write-Host "Auto stop : waiting ($($blocked -join ', '))"
+      }
+      else {
+        Write-Host "Auto stop : $($control.idleShutdown.remainingSeconds)s remaining"
+      }
+    }
+    else {
+      Write-Host "Auto stop : OFF"
+    }
   }
   return $identity
 }
