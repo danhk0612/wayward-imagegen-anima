@@ -81,11 +81,15 @@ http://127.0.0.1:8189/setup.html
 
 The setup wizard can:
 
-- detect diffusion models, text encoders, VAEs, samplers and LoRAs from ComfyUI,
+- auto-discover common local ComfyUI endpoints or use a manual/remote URL,
+- detect diffusion models, text encoders, VAEs, samplers and LoRAs from ComfyUI without absolute filesystem paths,
+- report whether the connected ComfyUI has the native Anima node set,
 - add/remove Wayward character profiles,
 - configure one or more character LoRAs with strengths,
 - optionally add global/style LoRAs shared by every configured character,
-- edit trigger, base and optional prompt-affix text,
+- import a LoRA author's recommended prompt and separate LoRA syntax/strength, a confidently matched trigger, and stable base tags,
+- derive a conservative old-game identity prefix from two or more real rendered Wayward prompts,
+- edit trigger, base and optional prompt-affix text manually when needed,
 - validate the selected Anima components against the live ComfyUI instance,
 - disable/restore downloaded static image packs per character,
 - delete only locally generated art for one character,
