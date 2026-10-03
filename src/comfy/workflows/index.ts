@@ -211,6 +211,73 @@ export function buildIllustriousPrompt(
   return buildSdxlLikePrompt('Illustrious', config, textPrompt, negativePrompt, filenamePrefix, seed, overrides, referenceImagePath, talentName)
 }
 
+export interface AnimaPromptComposition {
+  characterName: string | null
+  sceneSlug: string | null
+  rawPrompt: string
+  scenePrompt: string
+  finalTextPrompt: string
+  rawNegativePrompt: string
+  finalNegativePrompt: string
+  isComplexInteraction: boolean
+  profileLoraScale: number
+}
+
+/**
+ * Compose the exact text sent to Anima without building or submitting a graph.
+ * The setup UI uses this to explain how a user's profile changes a real game
+ * prompt, and the renderer uses the same function so the preview cannot drift.
+ */
+export function composeAnimaPrompts(
+  config: Config,
+  textPrompt: string,
+  negativePrompt: string,
+  talentName?: string,
+  disableComplexScenePolicy = false,
+): AnimaPromptComposition {
+  const characterName = talentName ? extractCharacterName(talentName, config.characterDirs) : null
+  const profile: CharacterProfile | undefined = characterName ? config.characterProfiles[characterName] : undefined
+  const characterPrefix = [
+    profile?.triggerPrompt ?? '',
+    profile?.basePrompt ?? '',
+    profile?.positivePromptPrefix ?? '',
+  ].map(part => part.trim()).filter(Boolean).join(', ')
+  const scenePrompt = stripGamePromptPrefix(textPrompt, profile?.gamePromptPrefixToStrip)
+  const sceneSlug = extractSceneSlug(talentName)
+  const isComplexInteraction = !disableComplexScenePolicy
+    && config.complexScenePolicy.enabled
+    && isComplexInteractionScene(scenePrompt)
+  const genericSceneHint = isComplexInteraction ? config.complexScenePolicy.positivePrompt : ''
+  const genericSceneNegativeHint = isComplexInteraction ? config.complexScenePolicy.negativePrompt : ''
+  const specificSceneHint = sceneSlug ? config.scenePromptHints[sceneSlug] ?? '' : ''
+  const specificSceneNegativeHint = sceneSlug ? config.sceneNegativePromptHints[sceneSlug] ?? '' : ''
+  const sceneHint = [genericSceneHint, specificSceneHint].map(s => s.trim()).filter(Boolean).join(', ')
+  const sceneNegativeHint = [genericSceneNegativeHint, specificSceneNegativeHint].map(s => s.trim()).filter(Boolean).join(', ')
+  const finalTextPrompt = composePrompt(
+    composePrompt(config.positivePromptPrefix, characterPrefix, sceneHint),
+    scenePrompt,
+    composePrompt('', profile?.positivePromptSuffix ?? '', config.positivePromptSuffix),
+  )
+  const finalNegativePrompt = composeNegativePrompt(
+    composeNegativePrompt(config.negativePromptPrefix, profile?.negativePromptPrefix ?? '', sceneNegativeHint),
+    negativePrompt,
+    composeNegativePrompt('', profile?.negativePromptSuffix ?? '', config.negativePromptSuffix),
+  )
+  const profileLoraScale = isComplexInteraction ? config.complexScenePolicy.characterLoraScale : 1
+
+  return {
+    characterName,
+    sceneSlug,
+    rawPrompt: textPrompt,
+    scenePrompt,
+    finalTextPrompt,
+    rawNegativePrompt: negativePrompt,
+    finalNegativePrompt,
+    isComplexInteraction,
+    profileLoraScale,
+  }
+}
+
 /**
  * Native Anima Base v1 path.
  *
@@ -246,35 +313,20 @@ export function buildAnimaPrompt(
     : (configuredDimensions || overrides?.dimensions)
   const { width, height } = parseDimensions(effectiveDimensions)
 
-  const characterName = talentName ? extractCharacterName(talentName, config.characterDirs) : null
-  const profile: CharacterProfile | undefined = characterName ? config.characterProfiles[characterName] : undefined
-  const characterPrefix = [
-    profile?.triggerPrompt ?? '',
-    profile?.basePrompt ?? '',
-    profile?.positivePromptPrefix ?? '',
-  ].map(part => part.trim()).filter(Boolean).join(', ')
-  const scenePrompt = stripGamePromptPrefix(textPrompt, profile?.gamePromptPrefixToStrip)
-  const sceneSlug = extractSceneSlug(talentName)
-  const isComplexInteraction = !overrides?.disableComplexScenePolicy
-    && config.complexScenePolicy.enabled
-    && isComplexInteractionScene(scenePrompt)
-  const genericSceneHint = isComplexInteraction ? config.complexScenePolicy.positivePrompt : ''
-  const genericSceneNegativeHint = isComplexInteraction ? config.complexScenePolicy.negativePrompt : ''
-  const specificSceneHint = sceneSlug ? config.scenePromptHints[sceneSlug] ?? '' : ''
-  const specificSceneNegativeHint = sceneSlug ? config.sceneNegativePromptHints[sceneSlug] ?? '' : ''
-  const sceneHint = [genericSceneHint, specificSceneHint].map(s => s.trim()).filter(Boolean).join(', ')
-  const sceneNegativeHint = [genericSceneNegativeHint, specificSceneNegativeHint].map(s => s.trim()).filter(Boolean).join(', ')
-  const finalTextPrompt = composePrompt(
-    composePrompt(config.positivePromptPrefix, characterPrefix, sceneHint),
-    scenePrompt,
-    composePrompt('', profile?.positivePromptSuffix ?? '', config.positivePromptSuffix),
-  )
-  const finalNegativePrompt = composeNegativePrompt(
-    composeNegativePrompt(config.negativePromptPrefix, profile?.negativePromptPrefix ?? '', sceneNegativeHint),
+  const composed = composeAnimaPrompts(
+    config,
+    textPrompt,
     negativePrompt,
-    composeNegativePrompt('', profile?.negativePromptSuffix ?? '', config.negativePromptSuffix),
+    talentName,
+    overrides?.disableComplexScenePolicy === true,
   )
-  const profileLoraScale = isComplexInteraction ? config.complexScenePolicy.characterLoraScale : 1
+  const {
+    characterName,
+    finalTextPrompt,
+    finalNegativePrompt,
+    profileLoraScale,
+  } = composed
+  const profile: CharacterProfile | undefined = characterName ? config.characterProfiles[characterName] : undefined
 
   const nodes: ComfyGraph = {
     '3000': {
