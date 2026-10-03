@@ -861,9 +861,19 @@ export function registerSetupRoutes(router: Router, config: Config, cache: Cache
     const devices = Array.isArray(stats.devices) ? stats.devices : []
     const device = (devices[0] ?? {}) as Record<string, unknown>
 
+    const requiredNodes = ['UNETLoader', 'CLIPLoader', 'VAELoader', 'KSampler']
+    const missingNodes = requiredNodes.filter(name => !info[name])
+    if (!info.LoraLoaderModelOnly && !info.LoraLoader) {
+      missingNodes.push('LoraLoaderModelOnly/LoraLoader')
+    }
+
     sendJson(ctx.res, 200, {
       connected: true,
       comfyUrl,
+      compatibility: {
+        nativeAnima: missingNodes.length === 0,
+        missingNodes,
+      },
       system: {
         version: system.comfyui_version ?? null,
         python: typeof system.python_version === 'string'
