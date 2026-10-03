@@ -29,7 +29,7 @@ import { RuntimeActivity } from './runtime/activity.ts'
 import { BatchQueue } from './batch/queue.ts'
 import { registerBatchRoutes } from './batch/routes.ts'
 
-export const VERSION = '0.2.0'
+export const VERSION = '0.2.1'
 
 export interface ServerHandle {
   server: http.Server
