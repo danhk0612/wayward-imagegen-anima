@@ -13,7 +13,7 @@ import type { CacheStore } from '../cache/cacheStore.ts'
 import { ComfyClient, inputChoices } from '../comfy/client.ts'
 import { Router, sendJson, HttpError, type RequestContext } from '../http/router.ts'
 import { readJson } from '../http/body.ts'
-import { buildComfyPrompt } from '../comfy/workflows/index.ts'
+import { buildComfyPrompt, composeAnimaPrompts } from '../comfy/workflows/index.ts'
 import { webpAvailable } from '../comfy/media.ts'
 import { extractCharacterName } from '../naming.ts'
 import { analysePromptPrefix } from '../setup/promptTools.ts'
@@ -571,6 +571,46 @@ export function registerSetupRoutes(router: Router, config: Config, cache: Cache
     sendJson(ctx.res, 200, {
       found,
       note: 'Automatic discovery scans common local ComfyUI ports only. Remote/custom URLs remain available through manual entry.',
+    })
+  })
+
+  router.post('/api/setup/prompt-preview', async ctx => {
+    requireLocal(ctx)
+    const body = await readJson<{
+      settings?: unknown
+      characterId?: string
+      prompt?: string
+      negativePrompt?: string
+    }>(ctx.req, SETUP_BODY_LIMIT)
+
+    const settings = normalizeSettings(body.settings)
+    const characterId = typeof body.characterId === 'string' ? body.characterId.trim().toLowerCase() : ''
+    if (!CHARACTER_ID.test(characterId) || !settings.characterProfiles[characterId]) {
+      throw new HttpError(400, 'choose a configured character for prompt preview')
+    }
+    const prompt = promptField(body.prompt, 'prompt').trim()
+    if (!prompt) throw new HttpError(400, 'prompt is required for preview')
+    const negativePrompt = promptField(body.negativePrompt, 'negativePrompt')
+
+    const previewConfig: Config = {
+      ...config,
+      ...settings,
+      imagePreset: 'anima',
+      lora: '',
+      loraStrength: 1,
+    }
+    const composed = composeAnimaPrompts(
+      previewConfig,
+      prompt,
+      negativePrompt,
+      `${characterId}__setup-preview`,
+      true,
+    )
+    sendJson(ctx.res, 200, {
+      ok: true,
+      characterId,
+      ...composed,
+      note: 'Preview disables optional complex-scene policy so it shows only stable profile/global transformations.',
     })
   })
 
