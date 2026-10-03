@@ -148,9 +148,9 @@ try {
   })
   await jobs.tick()
   assert(jobs.get(direct.promptId)?.status === 'completed', 'On-demand render did not complete')
-  const directFiles = filesUnder(config.imagesDir)
-  assert(directFiles.length === 1, 'On-demand render did not save exactly one image')
-  assert(directFiles[0].includes(path.join('characters', 'test')), 'On-demand image was not filed under the character')
+  const characterDir = path.join(config.imagesDir, 'illustrious', 'characters', 'test')
+  const directFiles = filesUnder(characterDir)
+  assert(directFiles.length === 1, 'On-demand render did not save exactly one character image')
 
   // 2) Pre-generation uses the same profile/cache path and completes without a
   // downloaded/static image pack being present.
@@ -168,7 +168,7 @@ try {
     await sleep(25)
   }
   assert(batch.status().completed === 1, 'Batch pre-generation did not complete')
-  const completedFiles = filesUnder(config.imagesDir)
+  const completedFiles = filesUnder(characterDir)
   assert(completedFiles.length === 2, 'Batch pre-generation did not add one image')
 
   // 3) Cancelling a running backend-owned batch render interrupts only that
@@ -187,7 +187,7 @@ try {
     'Running batch job was never submitted',
   )
   await jobs.tick()
-  const beforeCancel = filesUnder(config.imagesDir).map(file => ({
+  const beforeCancel = filesUnder(characterDir).map(file => ({
     file,
     bytes: fs.readFileSync(file).toString('hex'),
   }))
@@ -198,7 +198,7 @@ try {
   assert(fake.interrupted, 'Fake ComfyUI did not receive interrupt')
   await sleep(550)
 
-  const afterCancel = filesUnder(config.imagesDir).map(file => ({
+  const afterCancel = filesUnder(characterDir).map(file => ({
     file,
     bytes: fs.readFileSync(file).toString('hex'),
   }))
