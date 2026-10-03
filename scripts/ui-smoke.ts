@@ -26,6 +26,7 @@ for (const file of ['index.html', 'setup.html']) {
 const setup = fs.readFileSync(path.join(uiDir, 'setup.html'), 'utf8')
 for (const id of [
   'comfyUrl',
+  'discoverComfy',
   'profiles',
   'validateSetup',
   'renderTest',
