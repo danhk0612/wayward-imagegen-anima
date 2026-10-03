@@ -51,6 +51,35 @@ jobs:
           $exe = Join-Path $backend 'wayward-imagegen.exe'
           & $exe --help
           if ($LASTEXITCODE -ne 0) { throw 'Compiled CLI --help failed.' }
+      - name: External server manager lifecycle smoke
+        shell: pwsh
+        run: |
+          $stage = Get-ChildItem dist -Directory -Filter 'Wayward-Anima-ImageGen-Portable-*' | Select-Object -First 1
+          if (-not $stage) { throw 'Portable staging directory not found.' }
+          $manager = Join-Path $stage.FullName 'Wayward-Anima-Server.ps1'
+          $managerCmd = Join-Path $stage.FullName 'Wayward-Anima-Server.cmd'
+          if (-not (Test-Path $manager) -or -not (Test-Path $managerCmd)) { throw 'Server manager entry points are missing.' }
+
+          & $manager -Action Status -GameRoot $stage.FullName
+          & $manager -Action Start -GameRoot $stage.FullName
+
+          $ready = $false
+          for ($i = 0; $i -lt 40; $i++) {
+            Start-Sleep -Milliseconds 250
+            try {
+              $s = Invoke-RestMethod 'http://127.0.0.1:8189/api/setup/settings' -TimeoutSec 2
+              if ($s.configPath -match 'Wayward-Anima-ImageGen-Portable') { $ready = $true; break }
+            } catch { }
+          }
+          if (-not $ready) { throw 'Server manager did not start the target backend.' }
+
+          & $manager -Action Status -GameRoot $stage.FullName
+          & $manager -Action Stop -GameRoot $stage.FullName
+          Start-Sleep -Milliseconds 500
+          if (Get-NetTCPConnection -LocalPort 8189 -State Listen -ErrorAction SilentlyContinue) {
+            throw 'Server manager did not release port 8189.'
+          }
+
       - name: Safe Portable update smoke
         shell: pwsh
         run: |
