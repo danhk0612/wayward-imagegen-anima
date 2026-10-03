@@ -2,7 +2,7 @@ import * as fs from 'node:fs'
 import * as os from 'node:os'
 import * as path from 'node:path'
 import { resolveConfig } from '../src/config.ts'
-import { buildComfyPrompt, isComplexInteractionScene } from '../src/comfy/workflows/index.ts'
+import { buildComfyPrompt, composeAnimaPrompts, isComplexInteractionScene } from '../src/comfy/workflows/index.ts'
 import { resolvePromptHash } from '../src/routes/image.ts'
 import { VERSION } from '../src/server.ts'
 import { analysePromptPrefix } from '../src/setup/promptTools.ts'
@@ -59,6 +59,18 @@ fs.writeFileSync(configPath, JSON.stringify({
 }), 'utf8')
 
 const cfg = resolveConfig([], tmp)
+const preview = composeAnimaPrompts(
+  cfg,
+  'masterpiece, best quality, 1girl, old_elena, black hair, medium breasts, tavern, standing, smile',
+  '',
+  'elena__task-preview__outfit-modest',
+  true,
+)
+assert(preview.scenePrompt === 'tavern, standing, smile', 'Prompt preview must strip only the configured leading game identity')
+assert(
+  preview.finalTextPrompt.includes('elena_trigger, silver hair, blue eyes, tavern, standing, smile'),
+  'Prompt preview must show the exact character identity + remaining Wayward scene prompt',
+)
 assert(isComplexInteractionScene('1girl, cunnilingus, lying on back'), 'Implicit two-person interaction must be detected without an explicit 1boy tag')
 assert(!isComplexInteractionScene('1girl, kneeling alone in a tavern'), 'Solo pose must not be classified as a complex interaction')
 const graph = buildComfyPrompt(
