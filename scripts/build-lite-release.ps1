@@ -57,18 +57,18 @@ if errorlevel 1 pause
 $readme = @'
 Wayward Anima ImageGen - Lite
 
-사용 순서
-1. 이 ZIP의 내용을 Wayward index.html이 있는 폴더에 풉니다.
-2. ComfyUI를 실행합니다.
-3. Wayward-Anima.cmd를 더블클릭합니다.
-4. 최초 실행에서는 브라우저 설정 화면에서 Anima 모델/LoRA/캐릭터를 설정합니다.
-5. 이후에는 ComfyUI -> Wayward-Anima.cmd 순서로 실행하면 됩니다.
+1. Extract this package into the folder that contains Wayward index.html.
+2. Start ComfyUI.
+3. Double-click Wayward-Anima.cmd.
+4. On first run, configure the Anima model, LoRA and Wayward character in the browser setup page.
+5. Later, normal startup is: ComfyUI -> Wayward-Anima.cmd.
 
-Lite 버전은 Bun이 PATH에 설치되어 있어야 합니다.
-ComfyUI, 모델, LoRA, Wayward, 생성 이미지는 포함하지 않습니다.
-일반 업데이트는 기존 설정/생성 이미지/캐시를 삭제하지 않습니다.
+Bun must be installed and available in PATH for the Lite package.
+ComfyUI, models, LoRAs, Wayward and generated images are not included.
+Routine updates preserve existing config, generated images and cache.
 
-자세한 내용: wayward-imagegen\DISTRIBUTION.md
+The browser setup UI is localized and contains the detailed setup guidance.
+See wayward-imagegen\DISTRIBUTION.md for technical details.
 '@
 [System.IO.File]::WriteAllText(
   (Join-Path $stage "README.txt"),
