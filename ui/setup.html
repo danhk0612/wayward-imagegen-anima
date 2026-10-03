@@ -206,7 +206,7 @@ function parseRecommendedLoraPrompt(text, characterId){
   const withoutLoras=String(text||'').replace(
     /<lora:([^:>]+)(?::([+-]?(?:\d+(?:\.\d*)?|\.\d+)))?>/gi,
     (_,rawName,rawStrength)=>{
-      const strength=rawStrength==null||rawStrength===''?.9:Number(rawStrength);
+      const strength=(rawStrength==null||rawStrength==='') ? .9 : Number(rawStrength);
       loras.push({name:matchKnownLora(rawName.trim()),strengthModel:Number.isFinite(strength)?strength:.9});
       return '';
     }
@@ -575,6 +575,40 @@ $('quality').onchange=()=>{
   const v=$('quality').value;if(v==='fast')$('steps').value=26;else if(v==='balanced')$('steps').value=30;else if(v==='quality')$('steps').value=36;
 };
 $('steps').oninput=()=>{$('quality').value=Number($('steps').value)===26?'fast':Number($('steps').value)===30?'balanced':Number($('steps').value)===36?'quality':'custom'};
+
+async function discoverComfy(){
+  const status=$('discoverStatus');
+  status.textContent='이 PC에서 ComfyUI를 찾는 중…';
+  try{
+    const b=await api('/api/setup/comfy-discover');
+    const found=b.found||[];
+    if(!found.length){
+      status.textContent='일반적인 로컬 포트에서 ComfyUI를 찾지 못했습니다. 실행 여부를 확인하거나 주소/포트를 직접 입력하세요.';
+      return;
+    }
+    status.innerHTML='';
+    const label=document.createElement('span');
+    label.textContent=found.length===1?'ComfyUI를 찾았습니다: ':'여러 ComfyUI를 찾았습니다. 사용할 항목을 선택하세요: ';
+    status.append(label);
+    for(const item of found){
+      const btn=document.createElement('button');
+      btn.style.margin='4px';
+      btn.textContent=item.url+(item.version?' · v'+item.version:'')+(item.device?' · '+item.device:'');
+      btn.onclick=()=>{
+        $('comfyUrl').value=item.url;
+        probe();
+      };
+      status.append(btn);
+    }
+    if(found.length===1){
+      $('comfyUrl').value=found[0].url;
+      probe();
+    }
+  }catch(e){
+    status.textContent='ComfyUI 자동 찾기 실패: '+e.message;
+  }
+}
+$('discoverComfy').onclick=discoverComfy;
 
 async function probe(){
   $('probeStatus').textContent='확인 중…';$('probeStatus').className='status';
