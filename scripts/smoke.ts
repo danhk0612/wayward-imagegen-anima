@@ -5,6 +5,7 @@ import { resolveConfig } from '../src/config.ts'
 import { buildComfyPrompt, isComplexInteractionScene } from '../src/comfy/workflows/index.ts'
 import { resolvePromptHash } from '../src/routes/image.ts'
 import { VERSION } from '../src/server.ts'
+import { analysePromptPrefix } from '../src/setup/promptTools.ts'
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message)
@@ -14,6 +15,16 @@ const packageVersion = JSON.parse(
   fs.readFileSync(path.resolve(process.cwd(), 'package.json'), 'utf8'),
 ).version as string
 assert(VERSION === packageVersion, `Server VERSION ${VERSION} must match package.json ${packageVersion}`)
+
+const analysedPrefix = analysePromptPrefix([
+  'masterpiece, best quality, 1girl, old_identity, long dark hair, tavern, standing',
+  'masterpiece, best quality, 1girl, old_identity, long dark hair, bedroom, sitting',
+])
+assert(
+  analysedPrefix.candidatePrefix === 'masterpiece, best quality, 1girl, old_identity, long dark hair',
+  'Prompt prefix analysis must keep only the stable leading game identity tags',
+)
+assert(analysePromptPrefix(['one scene only']).candidatePrefix === '', 'One prompt must never be auto-stripped')
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'wayward-anima-smoke-'))
 const configPath = path.join(tmp, 'wayward-imagegen.config.json')
