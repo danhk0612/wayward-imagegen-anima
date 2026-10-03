@@ -56,11 +56,31 @@ jobs:
           Set-Content -Path (Join-Path $backend 'src\stale.ts') -Value '// stale portable source' -Encoding UTF8
           Set-Content -Path (Join-Path $root 'Wayward-Anima.cmd') -Value '@echo stale' -Encoding ASCII
 
+          $built = Get-ChildItem dist -Directory -Filter 'Wayward-Anima-ImageGen-Portable-*' | Select-Object -First 1
+          if (-not $built) { throw 'Portable stage not found for updater smoke.' }
+          Copy-Item (Join-Path $built.FullName 'wayward-imagegen\wayward-imagegen.exe') (Join-Path $backend 'wayward-imagegen.exe') -Force
+          Copy-Item (Join-Path $built.FullName 'wayward-imagegen\ui') (Join-Path $backend 'ui') -Recurse -Force
+          $running = Start-Process -FilePath (Join-Path $backend 'wayward-imagegen.exe') -WorkingDirectory $backend -PassThru -WindowStyle Hidden
+          $ready = $false
+          for ($i = 0; $i -lt 40; $i++) {
+            Start-Sleep -Milliseconds 250
+            try {
+              $s = Invoke-RestMethod 'http://127.0.0.1:8189/api/setup/settings' -TimeoutSec 2
+              if ($s.configPath -match 'Wayward-safe-update') { $ready = $true; break }
+            } catch { }
+          }
+          if (-not $ready) {
+            if (-not $running.HasExited) { Stop-Process -Id $running.Id -Force }
+            throw 'Fixture backend did not start for updater smoke.'
+          }
+
           $beforeConfig = (Get-FileHash (Join-Path $backend 'wayward-imagegen.config.json') -Algorithm SHA256).Hash
           $beforeImage = (Get-FileHash (Join-Path $art 'existing.png') -Algorithm SHA256).Hash
           $beforeState = (Get-FileHash (Join-Path $state 'batch.json') -Algorithm SHA256).Hash
 
           ./scripts/install-portable-to-wayward.ps1 -GameRoot $root
+          Start-Sleep -Milliseconds 500
+          if (-not $running.HasExited) { throw 'Installer did not shut down the idle target backend before update.' }
 
           $afterConfig = (Get-FileHash (Join-Path $backend 'wayward-imagegen.config.json') -Algorithm SHA256).Hash
           $afterImage = (Get-FileHash (Join-Path $art 'existing.png') -Algorithm SHA256).Hash
