@@ -95,6 +95,12 @@ export interface Config {
   concurrency: number
   maxQueued: number
   maxImagesPerHour: number
+
+  /** Optional backend shutdown after a proven idle period. Off by default. */
+  idleShutdownEnabled: boolean
+  /** Idle timeout in minutes when automatic shutdown is enabled. */
+  idleShutdownMinutes: number
+
   characterDirs: string[]
 
   checkpoint: string
@@ -389,6 +395,15 @@ export function resolveConfig(argv: string[] = [], cwd = process.cwd()): Config 
     concurrency: pickNum('concurrency', 'WAYWARD_CONCURRENCY', 'concurrency', 2),
     maxQueued: pickNum('max-queued', 'WAYWARD_MAX_QUEUED', 'maxQueued', 64),
     maxImagesPerHour: pickNum('max-images-per-hour', 'WAYWARD_MAX_IMAGES_PER_HOUR', 'maxImagesPerHour', 400),
+
+    idleShutdownEnabled: flags['idle-shutdown'] === 'true'
+      || envBool('WAYWARD_IDLE_SHUTDOWN', file.idleShutdownEnabled === true),
+    idleShutdownMinutes: pickNum(
+      'idle-shutdown-minutes',
+      'WAYWARD_IDLE_SHUTDOWN_MINUTES',
+      'idleShutdownMinutes',
+      30,
+    ),
 
     characterDirs,
 
