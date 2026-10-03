@@ -34,10 +34,11 @@ Completed:
 - Exact renderer-backed prompt transformation preview for raw -> stripped scene -> final Anima prompt.
 - Optional explicit LoRA trigger metadata suggestions through ComfyUI; no heuristic guessing from tag-frequency metadata.
 - Portable updater preserves custom image/state paths and auto-stops only an idle backend proven to belong to the selected Wayward root.
+- Clean Windows Wayward test-folder first-run and expanded setup/prompt-assistant UI validation completed.
+- Tagged release workflow builds Lite + Portable packages, generates SHA256 checksums and publishes GitHub release assets.
 
 ## Before 0.2.0 release
 
-- Re-check the expanded setup wizard on the clean Windows Wayward test folder after prompt-assistant changes.
 - Verify a character with no static image pack generates on demand and via pre-generation.
 - Verify cancel/shutdown while a batch image is running without deleting completed art.
 - Check Korean UI text and error messages on Windows PowerShell 5.1.
