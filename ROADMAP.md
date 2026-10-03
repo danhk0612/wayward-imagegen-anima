@@ -37,11 +37,12 @@ Completed:
 - Clean Windows Wayward test-folder first-run and expanded setup/prompt-assistant UI validation completed.
 - Tagged release workflow builds Lite + Portable packages, generates SHA256 checksums and publishes GitHub release assets.
 - Setup UI guidance and launcher/update flow verified on Windows PowerShell; CI also parses all PowerShell scripts with Windows PowerShell 5.1.
+- Runtime integration smoke verifies on-demand generation and pre-generation for a character with no static image pack.
+- Runtime integration smoke verifies cancelling a running backend-owned batch render leaves completed generated art unchanged.
 
 ## Before 0.2.0 release
 
-- Verify a character with no static image pack generates on demand and via pre-generation.
-- Verify cancel/shutdown while a batch image is running without deleting completed art.
+- Verify the full HTTP shutdown path once while a batch render is actively running.
 
 ## Optional later work
 
