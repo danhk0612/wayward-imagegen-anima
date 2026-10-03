@@ -622,9 +622,13 @@ export function registerSetupRoutes(router: Router, config: Config, cache: Cache
 
   router.post('/api/setup/generated-art/delete', async ctx => {
     requireLocal(ctx)
-    const body = await readJson<{ characterId?: string }>(ctx.req, 64 * 1024)
+    const body = await readJson<{ characterId?: string; confirmation?: string }>(ctx.req, 64 * 1024)
     const characterId = typeof body.characterId === 'string' ? body.characterId.trim().toLowerCase() : ''
     if (!CHARACTER_ID.test(characterId)) throw new HttpError(400, 'invalid characterId')
+    const required = `DELETE ${characterId}`
+    if (body.confirmation !== required) {
+      throw new HttpError(400, `generated-art deletion requires exact confirmation: ${required}`)
+    }
     const cacheEntriesRemoved = deleteGeneratedCharacterArt(config, cache, characterId)
     sendJson(ctx.res, 200, { ok: true, characterId, cacheEntriesRemoved })
   })
