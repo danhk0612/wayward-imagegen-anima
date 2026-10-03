@@ -84,10 +84,13 @@ The setup wizard can:
 - detect diffusion models, text encoders, VAEs, samplers and LoRAs from ComfyUI,
 - add/remove Wayward character profiles,
 - configure one or more character LoRAs with strengths,
+- optionally add global/style LoRAs shared by every configured character,
 - edit trigger, base and optional prompt-affix text,
 - validate the selected Anima components against the live ComfyUI instance,
 - disable/restore downloaded static image packs per character,
 - delete only locally generated art for one character,
+- import/export setup JSON and restore automatic config backups,
+- inspect image-library size/formats/WebP availability and set a disk cap,
 - pause/resume/clear pre-generation work,
 - safely cancel backend-owned ComfyUI work and shut down the backend.
 
