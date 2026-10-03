@@ -74,6 +74,7 @@ textarea{min-height:80px;resize:vertical}.inline{display:flex;gap:8px;align-item
       <div class="row"><label for="cfg">CFG</label><input id="cfg" type="number" min="0" max="30" step="0.1"></div>
       <div class="row"><label for="sampler">Sampler</label><select id="sampler"></select></div>
       <div class="row"><label for="scheduler">Scheduler</label><select id="scheduler"></select></div>
+      <div class="row"><label for="maxDiskGb">저장 공간 제한 (GB)</label><div><input id="maxDiskGb" type="number" min="0" max="100000" step="1"><div class="hint">0은 제한 없음입니다. 설정한 용량을 넘으면 새 렌더를 거부해 디스크 폭주를 막습니다.</div></div></div>
       <div class="row">
         <label for="animaDimensions">해상도</label>
         <div>
@@ -121,6 +122,11 @@ textarea{min-height:80px;resize:vertical}.inline{display:flex;gap:8px;align-item
       <div id="validationResult" class="status" style="margin-top:10px">아직 검사하지 않았습니다.</div>
       <div id="testRenderResult" class="status" style="margin-top:10px" hidden></div>
       <img id="testRenderImage" alt="Anima test render" hidden style="display:block;max-width:100%;max-height:520px;margin:10px auto 0;border:1px solid var(--line);border-radius:8px">
+    </div>
+    <div class="card">
+      <h2>이미지 저장소</h2>
+      <div id="storageStatus" class="status">저장소 확인 중…</div>
+      <div class="inline" style="margin-top:10px"><button id="refreshStorage">새로고침</button></div>
     </div>
     <div class="card">
       <h2>설정 백업</h2>
@@ -171,7 +177,7 @@ function setPage(n){
   document.querySelectorAll('.stepbtn').forEach(x=>x.classList.toggle('active',Number(x.dataset.step)===page));
   $('prev').disabled=page===1;$('next').hidden=page===4;$('save').hidden=page!==4;
   if(page===2)loadWayward();
-  if(page===4){buildSummary();loadBatch();loadBackups();}
+  if(page===4){buildSummary();loadBatch();loadBackups();loadStorage();}
 }
 document.querySelectorAll('.stepbtn').forEach(b=>b.onclick=()=>setPage(Number(b.dataset.step)));
 $('prev').onclick=()=>setPage(page-1);$('next').onclick=()=>setPage(page+1);
@@ -343,6 +349,7 @@ function collect(){
     cfg:Number($('cfg').value),
     sampler:$('sampler').value,
     scheduler:$('scheduler').value,
+    maxDiskGb:Number($('maxDiskGb').value||0),
     positivePromptPrefix:$('positivePrefix').value,
     positivePromptSuffix:$('positiveSuffix').value,
     negativePromptPrefix:$('negativePrefix').value,
@@ -364,6 +371,7 @@ function applySettingsToForm(s){
   $('cfg').value=s.cfg??4.5;
   $('animaDimensions').value=s.animaDimensions||'';
   $('quality').value=Number(s.steps)===26?'fast':Number(s.steps)===30?'balanced':Number(s.steps)===36?'quality':'custom';
+  $('maxDiskGb').value=s.maxDiskGb??0;
   $('positivePrefix').value=s.positivePromptPrefix||'';
   $('positiveSuffix').value=s.positivePromptSuffix||'';
   $('negativePrefix').value=s.negativePromptPrefix||'';
@@ -382,7 +390,7 @@ function buildSummary(){
   const s=collect();
   refreshTestCharacters();
   $('summary').textContent=
-    `ComfyUI: ${s.comfyUrl}\nModel: ${s.animaModel}\nEncoder: ${s.animaTextEncoder}\nVAE: ${s.animaVae}\nResolution: ${s.animaDimensions||'게임 요청 사용'}\nRender: ${s.steps} steps / CFG ${s.cfg} / ${s.sampler} / ${s.scheduler}\nGlobal LoRA: ${s.characterLoras.length}\nCharacters: ${Object.keys(s.characterProfiles).join(', ')||'(없음)'}`;
+    `ComfyUI: ${s.comfyUrl}\nModel: ${s.animaModel}\nEncoder: ${s.animaTextEncoder}\nVAE: ${s.animaVae}\nResolution: ${s.animaDimensions||'게임 요청 사용'}\nRender: ${s.steps} steps / CFG ${s.cfg} / ${s.sampler} / ${s.scheduler}\nDisk cap: ${s.maxDiskGb ? s.maxDiskGb + ' GB' : '제한 없음'}\nGlobal LoRA: ${s.characterLoras.length}\nCharacters: ${Object.keys(s.characterProfiles).join(', ')||'(없음)'}`;
 }
 $('validateSetup').onclick=async()=>{
   $('validationResult').textContent='검사 중…';
@@ -484,6 +492,33 @@ async function probe(){
 }
 $('probe').onclick=probe;
 
+function humanBytes(bytes){
+  const units=['B','KB','MB','GB','TB'];
+  let n=Number(bytes)||0,i=0;
+  while(n>=1024&&i<units.length-1){n/=1024;i++;}
+  return (i===0?n.toFixed(0):n.toFixed(2))+' '+units[i];
+}
+async function loadStorage(){
+  try{
+    const b=await api('/api/setup/storage');
+    const formats=Object.entries(b.formatCounts||{})
+      .sort((a,b)=>b[1]-a[1])
+      .map(([ext,count])=>ext+': '+count)
+      .join(', ')||'(파일 없음)';
+    const webp=b.webpConfigured
+      ? (b.webpAvailable?'사용 가능':'사용 설정됨 · 변환 모듈 없음 → PNG로 저장')
+      : '사용 안 함';
+    const cap=b.maxDiskGb?(b.maxDiskGb+' GB'):'제한 없음';
+    $('storageStatus').textContent=
+      '경로: '+b.imagesDir+'\n사용량: '+humanBytes(b.bytes)+'\n캐시 항목: '+b.cachedEntries+'\n형식: '+formats+'\nWebP: '+webp+'\n저장 공간 제한: '+cap;
+    $('storageStatus').className='status '+(b.webpConfigured&&!b.webpAvailable?'err':'');
+  }catch(e){
+    $('storageStatus').textContent='저장소 확인 실패: '+e.message;
+    $('storageStatus').className='status err';
+  }
+}
+$('refreshStorage').onclick=loadStorage;
+
 async function loadBackups(){
   try{
     const b=await api('/api/setup/backups');
@@ -522,6 +557,7 @@ $('restoreBackup').onclick=async()=>{
     $('topStatus').textContent='백업 복원 완료 · backend 재시작 필요';
     alert('백업 설정을 복원했습니다.\n현재 설정도 별도 백업했습니다.\nAI 서버를 종료한 뒤 Wayward-Anima.cmd로 다시 실행하면 복원 설정이 적용됩니다.');
     loadBackups();
+    loadStorage();
   }catch(e){
     $('backupStatus').textContent='백업 복원 실패: '+e.message;
     $('backupStatus').className='status err';
