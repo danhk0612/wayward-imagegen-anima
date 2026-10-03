@@ -12,8 +12,9 @@
     "start": "bun src/cli.ts",
     "doctor": "bun src/cli.ts doctor",
     "smoke": "bun scripts/smoke.ts",
-    "test": "bun scripts/smoke.ts && bun scripts/ui-smoke.ts",
-    "ui-smoke": "bun scripts/ui-smoke.ts"
+    "test": "bun scripts/smoke.ts && bun scripts/ui-smoke.ts && bun scripts/runtime-integration-smoke.ts",
+    "ui-smoke": "bun scripts/ui-smoke.ts",
+    "runtime-smoke": "bun scripts/runtime-integration-smoke.ts"
   },
   "engines": {
     "bun": ">=1.1.0"
