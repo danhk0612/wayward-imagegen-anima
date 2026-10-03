@@ -31,6 +31,9 @@ Completed:
 - Common-local-port ComfyUI discovery with manual remote/custom URL fallback and native-Anima compatibility reporting.
 - LoRA recommended-prompt importer with conservative trigger matching.
 - Real rendered Wayward prompt analysis for suggesting `gamePromptPrefixToStrip` only after multiple distinct samples.
+- Exact renderer-backed prompt transformation preview for raw -> stripped scene -> final Anima prompt.
+- Optional explicit LoRA trigger metadata suggestions through ComfyUI; no heuristic guessing from tag-frequency metadata.
+- Portable updater preserves custom image/state paths and auto-stops only an idle backend proven to belong to the selected Wayward root.
 
 ## Before 0.2.0 release
 
