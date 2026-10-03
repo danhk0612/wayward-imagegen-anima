@@ -36,12 +36,12 @@ Completed:
 - Portable updater preserves custom image/state paths and auto-stops only an idle backend proven to belong to the selected Wayward root.
 - Clean Windows Wayward test-folder first-run and expanded setup/prompt-assistant UI validation completed.
 - Tagged release workflow builds Lite + Portable packages, generates SHA256 checksums and publishes GitHub release assets.
+- Setup UI guidance and launcher/update flow verified on Windows PowerShell; CI also parses all PowerShell scripts with Windows PowerShell 5.1.
 
 ## Before 0.2.0 release
 
 - Verify a character with no static image pack generates on demand and via pre-generation.
 - Verify cancel/shutdown while a batch image is running without deleting completed art.
-- Check Korean UI text and error messages on Windows PowerShell 5.1.
 
 ## Optional later work
 
