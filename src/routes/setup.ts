@@ -36,6 +36,8 @@ export interface SetupSettings {
   sampler: string
   scheduler: string
   maxDiskGb: number
+  idleShutdownEnabled: boolean
+  idleShutdownMinutes: number
   positivePromptPrefix: string
   positivePromptSuffix: string
   negativePromptPrefix: string
@@ -203,6 +205,14 @@ function normalizeSettings(value: unknown): SetupSettings {
     sampler: stringValue(typed.sampler, 'sampler').trim(),
     scheduler: stringValue(typed.scheduler, 'scheduler').trim(),
     maxDiskGb: numberValue(typed.maxDiskGb ?? 0, 'maxDiskGb', 0, 100000),
+    idleShutdownEnabled: typed.idleShutdownEnabled === true,
+    idleShutdownMinutes: numberValue(
+      typed.idleShutdownMinutes ?? 30,
+      'idleShutdownMinutes',
+      1,
+      10080,
+      true,
+    ),
     positivePromptPrefix: promptField(typed.positivePromptPrefix, 'positivePromptPrefix'),
     positivePromptSuffix: promptField(typed.positivePromptSuffix, 'positivePromptSuffix'),
     negativePromptPrefix: promptField(typed.negativePromptPrefix, 'negativePromptPrefix'),
@@ -227,6 +237,8 @@ function currentSettings(config: Config): SetupSettings {
     sampler: firstAnimaSetup ? 'er_sde' : config.sampler,
     scheduler: firstAnimaSetup ? 'simple' : config.scheduler,
     maxDiskGb: config.maxDiskGb,
+    idleShutdownEnabled: config.idleShutdownEnabled,
+    idleShutdownMinutes: config.idleShutdownMinutes,
     positivePromptPrefix: firstAnimaSetup
       ? 'masterpiece, best quality'
       : config.positivePromptPrefix,
@@ -503,7 +515,7 @@ export function registerSetupRoutes(router: Router, config: Config, cache: Cache
         && config.imagePreset === 'anima'
         && Object.keys(config.characterProfiles).length > 0,
       settings: currentSettings(config),
-      note: 'Saving changes writes the JSON config. Restart wayward-imagegen to apply them.',
+      note: 'Most settings apply immediately. Only a changed ComfyUI URL requires a backend restart.',
     })
   })
 
