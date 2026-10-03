@@ -86,63 +86,103 @@ function Get-Status {
     }
   }
 
+  $control = $null
+  $reported = $null
+  $legacy = $false
+  $probeError = $null
+
   try {
     $control = Invoke-RestMethod -Uri ($backendBase + "/api/control/status") -TimeoutSec 2
-    $reported = [System.IO.Path]::GetFullPath([string]$control.instance.configPath)
-    $owned = [string]::Equals($reported, $configPath, [System.StringComparison]::OrdinalIgnoreCase)
-    if (-not $owned) {
-      return [PSCustomObject]@{
-        Kind = "foreign"
-        Label = "port 8189 belongs to another install"
-        Detail = "PID $($port.OwningProcess)`nConfig: $reported`nThis tray will not stop that server."
-        Owned = $false
-        Control = $control
-      }
+    if ($control.instance -and -not [string]::IsNullOrWhiteSpace([string]$control.instance.configPath)) {
+      $reported = [System.IO.Path]::GetFullPath([string]$control.instance.configPath)
     }
+    else {
+      $legacy = $true
+    }
+  }
+  catch {
+    $legacy = $true
+    $probeError = $_.Exception.Message
+  }
 
-    $batch = $control.batch
-    $idle = $control.idleShutdown
-    $idleLine = "Auto shutdown: OFF"
-    if ($idle.enabled) {
-      if ($idle.blockedBy.Count -gt 0) {
-        $idleLine = "Auto shutdown: waiting (" + ($idle.blockedBy -join ", ") + ")"
-      }
-      elseif ($idle.remainingSeconds -gt 0) {
-        $idleLine = "Auto shutdown: about $($idle.remainingSeconds)s remaining"
-      }
-      else {
-        $idleLine = "Auto shutdown: eligible"
+  if (-not $reported) {
+    try {
+      $setup = Invoke-RestMethod -Uri ($backendBase + "/api/setup/settings") -TimeoutSec 2
+      if (-not [string]::IsNullOrWhiteSpace([string]$setup.configPath)) {
+        $reported = [System.IO.Path]::GetFullPath([string]$setup.configPath)
       }
     }
-    $last = [DateTimeOffset]::FromUnixTimeMilliseconds([long]$control.lastGameRequestAt).LocalDateTime
-    $detail = @(
-      "State: $($control.state)",
-      "PID: $($control.instance.pid)",
-      "Last game request: $($last.ToString('yyyy-MM-dd HH:mm:ss'))",
-      "Batch: $($batch.done)/$($batch.total) / running=$($batch.running) / paused=$($batch.paused)",
-      "AI jobs: $(@($control.activeJobs).Count)",
-      $idleLine
-    ) -join "`n"
+    catch {
+      if (-not $probeError) { $probeError = $_.Exception.Message }
+    }
+  }
+
+  if (-not $reported) {
     return [PSCustomObject]@{
-      Kind = [string]$control.state
-      Label = switch ([string]$control.state) {
-        "generating" { "generating" }
-        "paused" { "paused" }
-        default { "running" }
-      }
-      Detail = $detail
+      Kind = "foreign"
+      Label = "port 8189 probe failed"
+      Detail = "PID $($port.OwningProcess)`n$probeError`nOwnership could not be verified, so this tray will not stop it."
+      Owned = $false
+      Control = $control
+    }
+  }
+
+  $owned = [string]::Equals($reported, $configPath, [System.StringComparison]::OrdinalIgnoreCase)
+  if (-not $owned) {
+    return [PSCustomObject]@{
+      Kind = "foreign"
+      Label = "port 8189 belongs to another install"
+      Detail = "PID $($port.OwningProcess)`nConfig: $reported`nThis tray will not stop that server."
+      Owned = $false
+      Control = $control
+    }
+  }
+
+  if ($legacy) {
+    $active = if ($control) { @($control.activeJobs).Count } else { 0 }
+    $batchRunning = if ($control -and $control.batch) { [bool]$control.batch.running } else { $false }
+    return [PSCustomObject]@{
+      Kind = "legacy"
+      Label = "backend restart required"
+      Detail = "PID $($port.OwningProcess)`nConfig: $reported`nOlder backend detected.`nActive jobs: $active / batch running: $batchRunning`nUse Restart server to load the current backend."
       Owned = $true
       Control = $control
     }
   }
-  catch {
-    return [PSCustomObject]@{
-      Kind = "foreign"
-      Label = "port 8189 probe failed"
-      Detail = "PID $($port.OwningProcess)`n$($_.Exception.Message)`nOwnership could not be verified, so this tray will not stop it."
-      Owned = $false
-      Control = $null
+
+  $batch = $control.batch
+  $idle = $control.idleShutdown
+  $idleLine = "Auto shutdown: OFF"
+  if ($idle.enabled) {
+    if ($idle.blockedBy.Count -gt 0) {
+      $idleLine = "Auto shutdown: waiting (" + ($idle.blockedBy -join ", ") + ")"
     }
+    elseif ($idle.remainingSeconds -gt 0) {
+      $idleLine = "Auto shutdown: about $($idle.remainingSeconds)s remaining"
+    }
+    else {
+      $idleLine = "Auto shutdown: eligible"
+    }
+  }
+  $last = [DateTimeOffset]::FromUnixTimeMilliseconds([long]$control.lastGameRequestAt).LocalDateTime
+  $detail = @(
+    "State: $($control.state)",
+    "PID: $($control.instance.pid)",
+    "Last game request: $($last.ToString('yyyy-MM-dd HH:mm:ss'))",
+    "Batch: $($batch.done)/$($batch.total) / running=$($batch.running) / paused=$($batch.paused)",
+    "AI jobs: $(@($control.activeJobs).Count)",
+    $idleLine
+  ) -join "`n"
+  return [PSCustomObject]@{
+    Kind = [string]$control.state
+    Label = switch ([string]$control.state) {
+      "generating" { "generating" }
+      "paused" { "paused" }
+      default { "running" }
+    }
+    Detail = $detail
+    Owned = $true
+    Control = $control
   }
 }
 
@@ -158,6 +198,7 @@ function Update-Tray {
     "paused" { $notify.Icon = [System.Drawing.SystemIcons]::Warning }
     "running" { $notify.Icon = [System.Drawing.SystemIcons]::Shield }
     "foreign" { $notify.Icon = [System.Drawing.SystemIcons]::Error }
+    "legacy" { $notify.Icon = [System.Drawing.SystemIcons]::Warning }
     default { $notify.Icon = [System.Drawing.SystemIcons]::Application }
   }
 
