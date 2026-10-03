@@ -247,8 +247,16 @@ async function loadWayward(){
         loadWayward();
       };
       box.querySelector('.deleteGenerated').onclick=async()=>{
-        if(!confirm(`${id}의 AI 생성 이미지와 해당 캐시를 삭제할까요?\n게임 저장 데이터와 정적 이미지팩은 건드리지 않습니다.`))return;
-        await api('/api/setup/generated-art/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({characterId:id})});
+        const required=`DELETE ${id}`;
+        const typed=prompt(
+          `${id}의 AI 생성 이미지와 해당 캐시를 영구 삭제합니다.\n게임 저장 데이터와 정적 이미지팩은 건드리지 않습니다.\n\n계속하려면 아래 문구를 정확히 입력하세요:\n${required}`
+        );
+        if(typed!==required)return;
+        await api('/api/setup/generated-art/delete',{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({characterId:id,confirmation:typed})
+        });
         loadWayward();
       };
       $('packControls').append(box);
