@@ -65,24 +65,35 @@ function Start-Backend {
     throw "Port 8189 is in use, but the Wayward image backend did not answer /api/pack."
   }
 
-  $bun = Get-Command bun -ErrorAction SilentlyContinue
-  if (-not $bun) {
-    throw "Bun was not found in PATH. Install/configure Bun before launching Wayward."
-  }
-
   New-Item -ItemType Directory -Path $stateDir -Force | Out-Null
 
-  # Get-Command bun may resolve to a PowerShell shim instead of bun.exe.
-  # Resolve it inside a child PowerShell so both installations work.
-  $bunCommand = "& bun 'src\cli.ts' --verbose"
+  if (Test-Path $backendExe) {
+    Start-Process `
+      -FilePath $backendExe `
+      -ArgumentList @("--verbose") `
+      -WorkingDirectory $backendRoot `
+      -WindowStyle Hidden `
+      -RedirectStandardOutput $stdoutLog `
+      -RedirectStandardError $stderrLog | Out-Null
+  }
+  else {
+    $bun = Get-Command bun -ErrorAction SilentlyContinue
+    if (-not $bun) {
+      throw "Bun was not found in PATH. Install/configure Bun or use the Portable package."
+    }
 
-  Start-Process `
-    -FilePath "powershell.exe" `
-    -ArgumentList @("-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", $bunCommand) `
-    -WorkingDirectory $backendRoot `
-    -WindowStyle Hidden `
-    -RedirectStandardOutput $stdoutLog `
-    -RedirectStandardError $stderrLog | Out-Null
+    # Get-Command bun may resolve to a PowerShell shim instead of bun.exe.
+    # Resolve it inside a child PowerShell so both installations work.
+    $bunCommand = "& bun 'src\cli.ts' --verbose"
+
+    Start-Process `
+      -FilePath "powershell.exe" `
+      -ArgumentList @("-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", $bunCommand) `
+      -WorkingDirectory $backendRoot `
+      -WindowStyle Hidden `
+      -RedirectStandardOutput $stdoutLog `
+      -RedirectStandardError $stderrLog | Out-Null
+  }
 
   $deadline = (Get-Date).AddSeconds(20)
   do {
@@ -118,7 +129,9 @@ function Stop-Backend {
 if (-not (Test-Path $gameEntry)) {
   throw "Wayward entry point not found: $gameEntry"
 }
-if (-not (Test-Path (Join-Path $backendRoot "src\cli.ts"))) {
+$backendExe = Join-Path $backendRoot "wayward-imagegen.exe"
+$backendCli = Join-Path $backendRoot "src\cli.ts"
+if (-not (Test-Path $backendExe) -and -not (Test-Path $backendCli)) {
   throw "wayward-imagegen backend not found: $backendRoot"
 }
 
