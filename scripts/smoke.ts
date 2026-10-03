@@ -4,10 +4,16 @@ import * as path from 'node:path'
 import { resolveConfig } from '../src/config.ts'
 import { buildComfyPrompt, isComplexInteractionScene } from '../src/comfy/workflows/index.ts'
 import { resolvePromptHash } from '../src/routes/image.ts'
+import { VERSION } from '../src/server.ts'
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message)
 }
+
+const packageVersion = JSON.parse(
+  fs.readFileSync(path.resolve(process.cwd(), 'package.json'), 'utf8'),
+).version as string
+assert(VERSION === packageVersion, `Server VERSION ${VERSION} must match package.json ${packageVersion}`)
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'wayward-anima-smoke-'))
 const configPath = path.join(tmp, 'wayward-imagegen.config.json')
