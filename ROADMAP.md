@@ -22,6 +22,9 @@ Completed:
 - Standalone Windows Portable ZIP with compiled backend; Bun is not required at runtime.
 - CI smoke test for the compiled executable, local setup UI serving, and graceful shutdown.
 - Most setup changes apply live without restarting the backend.
+- Optional global/style LoRAs shared by all configured characters.
+- Setup JSON import/export and automatic config-backup restore UI.
+- Image-library usage/format/WebP status plus configurable disk-cap control.
 
 ## Before 0.2.0 release
 
@@ -34,7 +37,6 @@ Completed:
 
 ## Optional later work
 
-- More advanced global/style LoRA controls.
 - Optional complex-scene policy UI.
 - Model/package download helpers only if licensing and maintenance cost remain acceptable.
 - Additional renderer backends such as Forge as separate adapters.
