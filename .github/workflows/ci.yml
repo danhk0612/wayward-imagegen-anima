@@ -44,6 +44,14 @@ jobs:
           $stage = Get-ChildItem dist -Directory -Filter 'Wayward-Anima-ImageGen-Portable-*' | Select-Object -First 1
           $backend = Join-Path $stage.FullName 'wayward-imagegen'
           $exe = Join-Path $backend 'wayward-imagegen.exe'
+
+          # Disposable Wayward-like fixture for reversible image-pack tests.
+          Set-Content -Path (Join-Path $stage.FullName 'index.html') -Value '<html><body>fixture</body></html>' -Encoding UTF8
+          Set-Content -Path (Join-Path $stage.FullName 'images-elena-1.js') -Value '// fixture manifest' -Encoding UTF8
+          $staticDir = Join-Path $stage.FullName 'images\illustrious\characters\elena'
+          New-Item -ItemType Directory -Path $staticDir -Force | Out-Null
+          Set-Content -Path (Join-Path $staticDir 'fixture.webp') -Value 'fixture' -Encoding UTF8
+
           $proc = Start-Process -FilePath $exe -WorkingDirectory $backend -PassThru -WindowStyle Hidden
           try {
             $ready = $false
@@ -55,6 +63,22 @@ jobs:
               } catch { }
             }
             if (-not $ready) { throw 'Compiled backend did not serve setup.html.' }
+
+            $wayward = Invoke-RestMethod 'http://127.0.0.1:8189/api/setup/wayward'
+            if (-not $wayward.detected) { throw 'Disposable Wayward root was not detected.' }
+            if ($wayward.characters.elena.activeManifests.Count -ne 1) { throw 'Fixture static manifest was not detected.' }
+            if (-not $wayward.characters.elena.staticImagesPresent) { throw 'Fixture static image directory was not detected.' }
+
+            $disableBody = @{ characterId = 'elena'; mode = 'disable' } | ConvertTo-Json
+            Invoke-RestMethod 'http://127.0.0.1:8189/api/setup/static-pack' -Method Post -ContentType 'application/json' -Body $disableBody | Out-Null
+            if (Test-Path (Join-Path $stage.FullName 'images-elena-1.js')) { throw 'Static manifest was not disabled.' }
+            if (-not (Test-Path (Join-Path $stage.FullName '_disabled-imagepacks\elena\images-elena-1.js'))) { throw 'Disabled manifest backup was not created.' }
+            if (Test-Path $staticDir) { throw 'Static image directory was not disabled.' }
+
+            $restoreBody = @{ characterId = 'elena'; mode = 'restore' } | ConvertTo-Json
+            Invoke-RestMethod 'http://127.0.0.1:8189/api/setup/static-pack' -Method Post -ContentType 'application/json' -Body $restoreBody | Out-Null
+            if (-not (Test-Path (Join-Path $stage.FullName 'images-elena-1.js'))) { throw 'Static manifest was not restored.' }
+            if (-not (Test-Path (Join-Path $staticDir 'fixture.webp'))) { throw 'Static image directory was not restored.' }
 
             $before = Invoke-RestMethod 'http://127.0.0.1:8189/api/setup/settings'
             $settings = $before.settings
