@@ -19,6 +19,9 @@ Completed:
 - Portable one-click PowerShell launcher with first-run setup flow.
 - MIT/NOTICE documentation with third-party model assets excluded.
 - Minimal Lite ZIP build script and CI packaging smoke test.
+- Standalone Windows Portable ZIP with compiled backend; Bun is not required at runtime.
+- CI smoke test for the compiled executable, local setup UI serving, and graceful shutdown.
+- Most setup changes apply live without restarting the backend.
 
 ## Before 0.2.0 release
 
@@ -31,7 +34,6 @@ Completed:
 
 ## Optional later work
 
-- Standalone portable executable build so Bun does not need to be installed.
 - More advanced global/style LoRA controls.
 - Optional complex-scene policy UI.
 - Model/package download helpers only if licensing and maintenance cost remain acceptable.
