@@ -20,6 +20,7 @@ First browser-configurable Anima-focused release.
 - Generated-art management, storage usage/status and optional disk cap.
 - Setup JSON import/export and automatic config backup/restore.
 - Batch pause/resume/clear, backend-owned ComfyUI cancellation and graceful shutdown.
+- External `Wayward-Anima-Server.cmd` manager for persistent backend status/start/stop/restart after the game/browser has closed.
 - Standalone Windows Portable package that does not require Bun at runtime.
 - Lite source package for Bun users.
 - Safe Portable updater that preserves config, generated images and configured state paths.
