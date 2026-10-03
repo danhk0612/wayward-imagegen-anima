@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.2.1
+
+Hotfix for stale/older backend reuse on Windows.
+
+### Fixed
+
+- The main launcher now verifies that an existing port 8189 backend belongs to the same Wayward installation instead of accepting any `/api/pack` response.
+- An older backend from the same installation is identified through the legacy setup `configPath` and restarted with the current package when it is idle.
+- The tray shows an owned older backend as `backend restart required` instead of the misleading `port 8189 probe failed` state.
+- The tray and console server manager can safely stop/restart an owned older backend while continuing to refuse another Wayward installation.
+- Windows CI reproduces the old status-response shape and verifies the compatibility restart path.
+
 ## 0.2.0
 
 First browser-configurable Anima-focused release.
