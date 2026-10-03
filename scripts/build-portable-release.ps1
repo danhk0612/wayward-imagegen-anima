@@ -62,15 +62,18 @@ if errorlevel 1 pause
 $readme = @'
 Wayward Anima ImageGen - Portable
 
-1. Put this package next to Wayward index.html.
-2. Start ComfyUI.
-3. Double-click Wayward-Anima.cmd.
-4. Complete the browser setup wizard on first run.
+사용 순서
+1. 이 ZIP의 내용을 Wayward index.html이 있는 폴더에 풉니다.
+2. ComfyUI를 실행합니다.
+3. Wayward-Anima.cmd를 더블클릭합니다.
+4. 최초 실행에서는 브라우저 설정 화면에서 Anima 모델/LoRA/캐릭터를 설정합니다.
+5. 이후에는 ComfyUI -> Wayward-Anima.cmd 순서로 실행하면 됩니다.
 
-Bun is NOT required for this Portable package.
-ComfyUI, models, LoRAs, Wayward and generated images are not included.
+Portable 버전은 Bun 설치가 필요하지 않습니다.
+ComfyUI, 모델, LoRA, Wayward, 생성 이미지는 포함하지 않습니다.
+일반 업데이트는 기존 설정/생성 이미지/캐시를 삭제하지 않습니다.
 
-See wayward-imagegen\DISTRIBUTION.md for details.
+자세한 내용: wayward-imagegen\DISTRIBUTION.md
 '@
 [System.IO.File]::WriteAllText(
   (Join-Path $stage "README.txt"),
