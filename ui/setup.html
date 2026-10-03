@@ -100,7 +100,7 @@ textarea{min-height:80px;resize:vertical}.inline{display:flex;gap:8px;align-item
   <section data-page="4" hidden>
     <div class="card">
       <h2>설정 확인</h2>
-      <div class="hint">저장하면 기존 JSON 설정은 자동 백업됩니다. 저장 후 backend를 재시작해야 변경 내용이 완전히 적용됩니다.</div>
+      <div class="hint">저장하면 기존 JSON 설정은 자동 백업됩니다. 대부분의 설정은 즉시 적용되며 ComfyUI 주소를 바꾼 경우에만 backend 재시작이 필요합니다.</div>
       <div id="summary" class="status"></div>
       <div class="inline" style="margin-top:10px">
         <button id="validateSetup">설정 검사</button>
@@ -407,8 +407,14 @@ $('save').onclick=async()=>{
   $('save').disabled=true;$('topStatus').textContent='저장 중…';
   try{
     const b=await api('/api/setup/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({settings:collect()})});
-    $('topStatus').textContent='저장 완료 · backend 재시작 필요';
-    alert('설정을 저장했습니다.\n기존 설정은 자동 백업되었습니다.\nbackend를 재시작하면 적용됩니다.');
+    if(b.restartRequired){
+      $('topStatus').textContent='저장 완료 · ComfyUI 주소 변경으로 backend 재시작 필요';
+      alert('설정을 저장했습니다.\n기존 설정은 자동 백업되었습니다.\nComfyUI 주소를 변경했으므로 backend를 한 번 재시작하세요.');
+    }else{
+      settings=collect();
+      $('topStatus').textContent='저장 및 즉시 적용 완료';
+      alert('설정을 저장했고 현재 backend에 즉시 적용했습니다.\n기존 설정은 자동 백업되었습니다.');
+    }
   }catch(e){$('topStatus').textContent='저장 실패';alert('저장 실패: '+e.message)}
   finally{$('save').disabled=false}
 };
