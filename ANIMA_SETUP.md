@@ -123,6 +123,36 @@ The easiest route is the local browser wizard at
 from ComfyUI, manages character profiles, validates the selected files and can
 run a real test render before saving.
 
+### What is automatic vs manual
+
+The setup UI never needs the absolute Windows path to a model or LoRA. It asks
+ComfyUI for the filenames ComfyUI already recognizes. Common local ComfyUI
+ports can be auto-discovered; a remote machine or custom port can be entered
+manually.
+
+The UI can also import a LoRA author's recommended prompt. For example:
+
+```text
+<lora:queen_shua:0.9>, queen_shua, 1girl, dark brown hair, golden eyes
+```
+
+is separated into:
+
+- LoRA: `queen_shua`, strength `0.9`
+- trigger: `queen_shua` when it matches the LoRA filename stem
+- base prompt: the remaining stable character tags
+
+Tags already present in the global positive prefix are removed from the base
+prompt to avoid duplication. If a trigger cannot be identified confidently, the
+UI leaves it for the user instead of guessing.
+
+`gamePromptPrefixToStrip` is different: it describes the **old fixed Wayward
+identity prefix** that should be removed before the new LoRA identity is added.
+The setup UI can derive a safe suggestion from rendered game history by finding
+the longest leading comma-tag sequence shared by at least two distinct prompts.
+With fewer than two distinct prompts it will show the latest prompt but will not
+auto-suggest a removable prefix.
+
 For manual JSON setup:
 
 1. Confirm the exact Anima model + character LoRA works by itself in your image
