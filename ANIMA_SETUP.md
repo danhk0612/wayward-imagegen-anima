@@ -148,6 +148,14 @@ UI leaves it for the user instead of guessing.
 
 `gamePromptPrefixToStrip` is different: it describes the **old fixed Wayward
 identity prefix** that should be removed before the new LoRA identity is added.
+
+If the LoRA contains an explicit trigger metadata field that ComfyUI can expose,
+the setup UI can show that trigger as a candidate. It deliberately does not
+invent a trigger from broad training-tag statistics.
+
+The per-character **Prompt transformation preview** uses the same composition
+function as the actual renderer. It shows the raw Wayward prompt, the scene
+prompt after prefix removal, and the final positive prompt Anima will receive.
 The setup UI can derive a safe suggestion from rendered game history by finding
 the longest leading comma-tag sequence shared by at least two distinct prompts.
 With fewer than two distinct prompts it will show the latest prompt but will not
