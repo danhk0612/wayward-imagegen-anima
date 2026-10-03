@@ -1,16 +1,19 @@
-# Wayward Anima ImageGen — Lite distribution
+# Wayward Anima ImageGen — distribution
 
-## Goal
+## Packages
 
-A small source distribution for Wayward players who already have a working
-ComfyUI installation with Anima-compatible models.
+Two release packages are supported:
 
-The package does not include ComfyUI, models, VAEs, text encoders, LoRAs,
-generated images, or Wayward itself.
+- **Portable** — recommended for most users. Includes a compiled Windows backend executable, so Bun is not required.
+- **Lite** — smaller source package for users who already have Bun installed and prefer the readable TypeScript runtime.
+
+Both packages require an already-working ComfyUI installation and do not include
+ComfyUI, diffusion models, VAEs, text encoders, LoRAs, generated images, or
+Wayward itself.
 
 ## Install
 
-1. Extract the ZIP into the folder that contains Wayward's `index.html`.
+1. Extract either ZIP into the folder that contains Wayward's `index.html`.
 2. Start ComfyUI.
 3. Double-click `Wayward-Anima.cmd`.
 4. On first run, the browser setup wizard opens at
@@ -20,12 +23,32 @@ generated images, or Wayward itself.
    prompts.
 7. Optionally disable that character's downloaded static image pack so newly
    generated images become authoritative.
-8. Save. Restart the local backend once after changing setup values.
+8. Save. Most settings apply immediately. Changing the ComfyUI URL requires one
+   backend restart.
 
 After setup, normal use is simply: start ComfyUI, then double-click
 `Wayward-Anima.cmd`.
 
-## Runtime layout
+## Portable layout
+
+```text
+Wayward/
+  index.html
+  Wayward-Anima.cmd
+  Wayward-Anima.ps1
+  wayward-imagegen/
+    wayward-imagegen.exe
+    ui/
+    LICENSE
+    NOTICE.md
+    wayward-imagegen.config.json   # created by setup
+    images/                         # generated locally
+```
+
+The compiled executable is intentionally kept separate from the browser UI so
+the UI remains inspectable and easy to replace without rebuilding the executable.
+
+## Lite layout
 
 ```text
 Wayward/
@@ -42,14 +65,38 @@ Wayward/
     images/                         # generated locally
 ```
 
+Lite additionally requires Bun in PATH.
+
 ## Safety / reversibility
+
+Routine updates preserve the existing config, generated art, image cache, batch
+state and static-image-pack state. Character art is only reset when an explicit
+reset operation is used.
 
 Static image packs are disabled by moving character-specific manifests and art
 under `_disabled-imagepacks/<character>/`, not by deleting them. They can be
 restored from the setup UI.
 
 Deleting AI-generated art affects only the backend's generated image folder and
-matching cache entries. It does not modify Wayward save data.
+matching cache entries. It requires an exact typed confirmation such as
+`DELETE elena`; it does not modify Wayward save data.
+
+## Build
+
+Lite:
+
+```powershell
+./scripts/build-lite-release.ps1
+```
+
+Portable:
+
+```powershell
+./scripts/build-portable-release.ps1
+```
+
+The Portable build uses Bun only at build time. The resulting Windows package
+does not require Bun at runtime.
 
 ## License
 
