@@ -191,7 +191,11 @@ if ((Test-Path $targetConfig) -and -not $InstallDevelopmentConfig) {
   Write-Host "Keeping existing production config:"
   Write-Host "  $targetConfig"
 }
-elseif (Test-Path $sourceConfig) {
+elseif ($InstallDevelopmentConfig) {
+  if (-not (Test-Path $sourceConfig)) {
+    throw "Development config requested but not found: $sourceConfig"
+  }
+
   $config = Get-Content $sourceConfig -Raw | ConvertFrom-Json
   $config.imagesDir = "images"
   if ($config.PSObject.Properties.Name -contains "stateDir") {
@@ -204,6 +208,9 @@ elseif (Test-Path $sourceConfig) {
   Write-Host "  $targetConfig"
 }
 else {
+  if (Test-Path $targetConfig) {
+    Remove-Item $targetConfig -Force
+  }
   Write-Host "No config installed. The first-run browser wizard will create one."
 }
 
