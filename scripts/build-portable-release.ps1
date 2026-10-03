@@ -48,6 +48,7 @@ foreach ($file in @(
 }
 
 Copy-Item (Join-Path (Join-Path $RepoRoot "scripts") "wayward-ai-launcher.ps1") (Join-Path $stage "Wayward-Anima.ps1") -Force
+Copy-Item (Join-Path (Join-Path $RepoRoot "scripts") "wayward-anima-server-manager.ps1") (Join-Path $stage "Wayward-Anima-Server.ps1") -Force
 
 $cmd = @'
 @echo off
@@ -60,6 +61,17 @@ if errorlevel 1 pause
   [System.Text.Encoding]::ASCII
 )
 
+$serverCmd = @'
+@echo off
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0Wayward-Anima-Server.ps1"
+if errorlevel 1 pause
+'@
+[System.IO.File]::WriteAllText(
+  (Join-Path $stage "Wayward-Anima-Server.cmd"),
+  $serverCmd,
+  [System.Text.Encoding]::ASCII
+)
+
 $readme = @'
 Wayward Anima ImageGen - Portable
 
@@ -68,6 +80,7 @@ Wayward Anima ImageGen - Portable
 3. Double-click Wayward-Anima.cmd.
 4. On first run, configure the Anima model, LoRA and Wayward character in the browser setup page.
 5. Later, normal startup is: ComfyUI -> Wayward-Anima.cmd.
+6. Use Wayward-Anima-Server.cmd to check whether the hidden backend is still running, or to start/stop/restart it without opening the game.
 
 Bun is not required for the Portable package.
 ComfyUI, models, LoRAs, Wayward and generated images are not included.
