@@ -1,0 +1,102 @@
+name: Publish v0.2.1 hotfix
+
+on:
+  push:
+    branches:
+      - hotfix/tray-stale-backend
+    paths:
+      - .github/workflows/publish-v021-release.yml
+
+permissions:
+  contents: write
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ee0d3e8132ae7447c5b57b62006e6857f9b7bd3b
+          fetch-depth: 0
+      - name: Create v0.2.1 tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git ls-remote --exit-code --tags origin refs/tags/v0.2.1 >/dev/null 2>&1; then
+            echo "v0.2.1 already exists; refusing to move it."
+            exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a v0.2.1 ee0d3e8132ae7447c5b57b62006e6857f9b7bd3b -m "v0.2.1"
+          git push origin refs/tags/v0.2.1
+
+  build-lite:
+    needs: tag
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: v0.2.1
+      - uses: oven-sh/setup-bun@v2
+      - name: Smoke tests
+        run: bun scripts/smoke.ts
+      - name: Build Lite ZIP
+        shell: pwsh
+        run: ./scripts/build-lite-release.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Wayward-Anima-ImageGen-Lite-v021
+          path: dist/Wayward-Anima-ImageGen-Lite-*.zip
+          if-no-files-found: error
+
+  build-portable:
+    needs: tag
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: v0.2.1
+      - uses: oven-sh/setup-bun@v2
+      - name: Build Portable ZIP
+        shell: pwsh
+        run: ./scripts/build-portable-release.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Wayward-Anima-ImageGen-Portable-v021
+          path: dist/Wayward-Anima-ImageGen-Portable-*.zip
+          if-no-files-found: error
+
+  release:
+    needs: [build-lite, build-portable]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: v0.2.1
+      - name: Verify release commit and version
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(node -p "require('./package.json').version")" = "0.2.1"
+          test "$(git rev-list -n 1 v0.2.1)" = "ee0d3e8132ae7447c5b57b62006e6857f9b7bd3b"
+      - uses: actions/download-artifact@v4
+        with:
+          name: Wayward-Anima-ImageGen-Lite-v021
+          path: release-assets
+      - uses: actions/download-artifact@v4
+        with:
+          name: Wayward-Anima-ImageGen-Portable-v021
+          path: release-assets
+      - name: Generate SHA256 checksums
+        shell: bash
+        run: |
+          cd release-assets
+          sha256sum *.zip > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh release create v0.2.1             release-assets/*.zip             release-assets/SHA256SUMS.txt             --verify-tag             --title "Wayward Anima ImageGen v0.2.1"             --generate-notes
