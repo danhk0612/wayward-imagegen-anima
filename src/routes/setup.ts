@@ -301,6 +301,40 @@ function sorted(values: string[] | null): string[] {
   return [...(values ?? [])].sort((a, b) => a.localeCompare(b))
 }
 
+function metadataTriggerCandidates(metadata: Record<string, unknown> | null): string[] {
+  if (!metadata) return []
+  const keys = [
+    'modelspec.trigger_phrase',
+    'modelspec.trigger_phrases',
+    'trigger_phrase',
+    'trigger_phrases',
+    'trigger_words',
+    'ss_trigger_words',
+  ]
+  const out: string[] = []
+  const add = (value: unknown): void => {
+    if (Array.isArray(value)) {
+      for (const item of value) add(item)
+      return
+    }
+    if (typeof value !== 'string') return
+    const text = value.trim()
+    if (!text) return
+    try {
+      const parsed = JSON.parse(text)
+      if (parsed !== text) {
+        add(parsed)
+        return
+      }
+    } catch { /* plain string */ }
+    for (const item of text.split(/[\n;]/).map(x => x.trim()).filter(Boolean)) {
+      if (!out.includes(item)) out.push(item)
+    }
+  }
+  for (const key of keys) add(metadata[key])
+  return out.slice(0, 20)
+}
+
 function setupOptionsFromInfo(info: Awaited<ReturnType<ComfyClient['objectInfo']>>) {
   if (!info) return null
   return {
@@ -565,6 +599,37 @@ export function registerSetupRoutes(router: Router, config: Config, cache: Cache
       note: analysis.sampleCount < 2
         ? 'At least two distinct rendered game prompts are needed for a safe automatic prefix suggestion.'
         : 'Candidate prefix is the longest leading comma-tag sequence shared by recent distinct game prompts.',
+    })
+  })
+
+  router.get('/api/setup/lora-metadata', async ctx => {
+    requireLocal(ctx)
+    const filename = (ctx.query.get('filename') ?? '').trim()
+    const requested = (ctx.query.get('url') ?? config.comfyUrl).trim().replace(/\/+$/, '')
+    if (!filename || !filename.toLowerCase().endsWith('.safetensors')) {
+      throw new HttpError(400, 'filename must be a .safetensors LoRA visible to ComfyUI')
+    }
+
+    let parsed: URL
+    try {
+      parsed = new URL(requested)
+    } catch {
+      throw new HttpError(400, 'url must be a valid ComfyUI URL')
+    }
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      throw new HttpError(400, 'url must use http or https')
+    }
+
+    const comfy = new ComfyClient(requested)
+    const metadata = await comfy.metadata('loras', filename)
+    sendJson(ctx.res, 200, {
+      filename,
+      metadataAvailable: metadata !== null,
+      triggerCandidates: metadataTriggerCandidates(metadata),
+      metadataKeys: metadata ? Object.keys(metadata).sort() : [],
+      note: metadata
+        ? 'Trigger candidates are read only from explicit trigger metadata keys; training tag statistics are not guessed.'
+        : 'This LoRA has no readable safetensors metadata through the connected ComfyUI.',
     })
   })
 
