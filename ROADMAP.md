@@ -27,11 +27,14 @@ Completed:
 - Image-library usage/format/WebP status plus configurable disk-cap control.
 - Sandbox CI verifies static image-pack disable/restore without touching a live library.
 - Disposable Portable-install helper for clean Wayward first-run testing.
+- Safe in-place Portable updater that preserves config/generated images and removes stale runtime/source files.
+- Common-local-port ComfyUI discovery with manual remote/custom URL fallback and native-Anima compatibility reporting.
+- LoRA recommended-prompt importer with conservative trigger matching.
+- Real rendered Wayward prompt analysis for suggesting `gamePromptPrefixToStrip` only after multiple distinct samples.
 
 ## Before 0.2.0 release
 
-- Test the setup wizard against a clean Wayward folder on Windows.
-- Verify first-run flow: launcher -> setup -> save -> automatic backend restart -> game.
+- Re-check the expanded setup wizard on the clean Windows Wayward test folder after prompt-assistant changes.
 - Verify a character with no static image pack generates on demand and via pre-generation.
 - Verify cancel/shutdown while a batch image is running without deleting completed art.
 - Check Korean UI text and error messages on Windows PowerShell 5.1.
