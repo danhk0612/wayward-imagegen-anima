@@ -25,6 +25,7 @@ import { registerVideoRoutes } from './routes/video.ts'
 import { registerExportRoutes } from './routes/export.ts'
 import { registerSetupRoutes } from './routes/setup.ts'
 import { registerControlRoutes } from './routes/control.ts'
+import { RuntimeActivity } from './runtime/activity.ts'
 import { BatchQueue } from './batch/queue.ts'
 import { registerBatchRoutes } from './batch/routes.ts'
 
@@ -59,6 +60,15 @@ function makeMissLogger(stateDir: string): (line: Record<string, unknown>) => vo
  * bytes, so the sender can finish writing and read our response. Past the
  * budget the connection is dropped.
  */
+function isGameActivityPath(pathname: string): boolean {
+  return pathname === '/api/pack'
+    || pathname.startsWith('/api/image/')
+    || pathname.startsWith('/api/video/')
+    || pathname.startsWith('/api/catalogue/')
+    || pathname === '/api/batch/enqueue'
+    || pathname.startsWith('/images/')
+}
+
 function drainAndClose(req: http.IncomingMessage, budget: number): void {
   let drained = 0
   req.on('data', (chunk: Buffer) => {
@@ -77,6 +87,7 @@ export function buildRouter(deps: {
   jobs: JobRunner
   review: ReviewStore
   batch: BatchQueue
+  runtime: RuntimeActivity
   shutdown: () => void
 }): Router {
   const router = new Router()
@@ -90,6 +101,7 @@ export function buildRouter(deps: {
   registerControlRoutes(router, {
     batch: deps.batch,
     jobs: deps.jobs,
+    runtime: deps.runtime,
     shutdown: deps.shutdown,
   })
   registerBatchRoutes(router, deps.batch)
@@ -139,6 +151,14 @@ export async function startServer(config: Config): Promise<ServerHandle> {
   const batch = new BatchQueue(config, cache, jobs).resume()
 
   let requestShutdown: () => void = () => {}
+  const runtime = new RuntimeActivity(
+    config,
+    batch,
+    jobs,
+    comfy,
+    () => requestShutdown(),
+    { version: VERSION },
+  )
   const router = buildRouter({
     config,
     cache,
@@ -147,6 +167,7 @@ export async function startServer(config: Config): Promise<ServerHandle> {
     jobs,
     review,
     batch,
+    runtime,
     shutdown: () => requestShutdown(),
   })
   const uiCandidates = [
@@ -171,6 +192,7 @@ export async function startServer(config: Config): Promise<ServerHandle> {
     if (config.verbose) console.log(`${req.method} ${req.url}`)
 
     const pathname = new URL(req.url ?? '/', 'http://localhost').pathname
+    if (isGameActivityPath(pathname)) runtime.markGameRequest()
 
     // The art library. Renders are immutable — a different prompt produces a
     // different file — so they can be cached hard.
@@ -234,6 +256,7 @@ export async function startServer(config: Config): Promise<ServerHandle> {
   const closeRuntime = async (): Promise<void> => {
     if (closing) return
     closing = true
+    runtime.stop()
     batch.pause()
     jobs.stop()
     hits.close()
@@ -244,6 +267,7 @@ export async function startServer(config: Config): Promise<ServerHandle> {
     await new Promise<void>(resolve => server.close(() => resolve()))
   }
   requestShutdown = () => { void closeRuntime() }
+  runtime.start()
 
   return {
     server, config, cache, hits, jobs, comfy, batch, port,
