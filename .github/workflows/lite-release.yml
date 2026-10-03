@@ -1,4 +1,4 @@
-name: Lite release
+name: Release packages
 
 on:
   workflow_dispatch:
@@ -22,4 +22,19 @@ jobs:
         with:
           name: Wayward-Anima-ImageGen-Lite
           path: dist/*.zip
+          if-no-files-found: error
+
+  build-portable:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - name: Build Portable ZIP
+        shell: pwsh
+        run: ./scripts/build-portable-release.ps1
+      - name: Upload Portable package
+        uses: actions/upload-artifact@v4
+        with:
+          name: Wayward-Anima-ImageGen-Portable
+          path: dist/Wayward-Anima-ImageGen-Portable-*.zip
           if-no-files-found: error
