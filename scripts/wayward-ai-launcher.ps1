@@ -56,14 +56,105 @@ function Test-SetupRequired {
   return ($cfg.imagePreset -ne "anima") -or ($profileCount -lt 1)
 }
 
-function Start-Backend {
-  if (Test-Http ($backendBase + "/api/pack") 2) {
-    return
+function Get-PortOwner {
+  return Get-NetTCPConnection -LocalPort 8189 -State Listen -ErrorAction SilentlyContinue |
+    Select-Object -First 1
+}
+
+function Get-BackendIdentity {
+  $port = Get-PortOwner
+  if (-not $port) {
+    return [PSCustomObject]@{
+      Running = $false
+      Owned = $false
+      Legacy = $false
+      Busy = $false
+      Pid = $null
+      ConfigPath = $null
+      Error = $null
+    }
   }
 
-  $port = Get-NetTCPConnection -LocalPort 8189 -State Listen -ErrorAction SilentlyContinue
+  $control = $null
+  $reported = $null
+  $legacy = $false
+  $probeError = $null
+
+  try {
+    $control = Invoke-RestMethod -Uri ($backendBase + "/api/control/status") -TimeoutSec 3
+    if ($control.instance -and -not [string]::IsNullOrWhiteSpace([string]$control.instance.configPath)) {
+      $reported = [System.IO.Path]::GetFullPath([string]$control.instance.configPath)
+    }
+    else {
+      $legacy = $true
+    }
+  }
+  catch {
+    $legacy = $true
+    $probeError = $_.Exception.Message
+  }
+
+  if (-not $reported) {
+    try {
+      $setup = Invoke-RestMethod -Uri ($backendBase + "/api/setup/settings") -TimeoutSec 3
+      if (-not [string]::IsNullOrWhiteSpace([string]$setup.configPath)) {
+        $reported = [System.IO.Path]::GetFullPath([string]$setup.configPath)
+      }
+    }
+    catch {
+      if (-not $probeError) { $probeError = $_.Exception.Message }
+    }
+  }
+
+  if ($reported) {
+    $expected = [System.IO.Path]::GetFullPath($configPath)
+    $owned = [string]::Equals($reported, $expected, [System.StringComparison]::OrdinalIgnoreCase)
+    $busy = $false
+    if ($control) {
+      $busy = (@($control.activeJobs).Count -gt 0) -or [bool]$control.batch.running
+    }
+    return [PSCustomObject]@{
+      Running = $true
+      Owned = $owned
+      Legacy = $legacy
+      Busy = $busy
+      Pid = $port.OwningProcess
+      ConfigPath = $reported
+      Error = $probeError
+    }
+  }
+
+  return [PSCustomObject]@{
+    Running = $true
+    Owned = $false
+    Legacy = $legacy
+    Busy = $false
+    Pid = $port.OwningProcess
+    ConfigPath = $null
+    Error = $probeError
+  }
+}
+
+function Start-Backend {
+  $identity = Get-BackendIdentity
+  if ($identity.Running) {
+    if (-not $identity.Owned) {
+      throw "Port 8189 is already used by another/unknown backend (PID $($identity.Pid))."
+    }
+    if (-not $identity.Legacy) {
+      return
+    }
+    if ($identity.Busy) {
+      throw "An older backend for this Wayward installation is still doing AI work. Wait for it to finish or pause/cancel it before restarting."
+    }
+
+    Write-Host "Older owned backend detected. Restarting it with the current package..." -ForegroundColor Yellow
+    Stop-Backend
+  }
+
+  $port = Get-PortOwner
   if ($port) {
-    throw "Port 8189 is in use, but the Wayward image backend did not answer /api/pack."
+    throw "Port 8189 is in use, but ownership could not be established safely."
   }
 
   New-Item -ItemType Directory -Path $stateDir -Force | Out-Null
@@ -118,7 +209,11 @@ function Start-Tray {
 }
 
 function Stop-Backend {
-  if (-not (Test-Http ($backendBase + "/api/pack") 2)) { return }
+  $identity = Get-BackendIdentity
+  if (-not $identity.Running) { return }
+  if (-not $identity.Owned) {
+    throw "Refusing to stop PID $($identity.Pid): port 8189 does not belong to this Wayward installation."
+  }
 
   try {
     Invoke-RestMethod `
@@ -133,7 +228,7 @@ function Stop-Backend {
   $deadline = (Get-Date).AddSeconds(15)
   do {
     Start-Sleep -Milliseconds 300
-    if (-not (Test-Http ($backendBase + "/api/pack") 1)) { return }
+    if (-not (Get-PortOwner)) { return }
   } while ((Get-Date) -lt $deadline)
 
   throw "The backend did not stop within 15 seconds."
