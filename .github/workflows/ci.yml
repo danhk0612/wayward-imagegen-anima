@@ -80,6 +80,22 @@ jobs:
             $after = Invoke-RestMethod 'http://127.0.0.1:8189/api/setup/settings'
             if ($after.settings.steps -ne 31) { throw 'Live setup step change was not visible.' }
             if (-not $after.settings.characterProfiles.test) { throw 'Live character profile change was not visible.' }
+
+            # A second save should create an automatic backup of the first
+            # config; restoring it writes that full JSON back atomically.
+            $settings.steps = 32
+            $body2 = @{ settings = $settings } | ConvertTo-Json -Depth 20
+            $saved2 = Invoke-RestMethod 'http://127.0.0.1:8189/api/setup/settings' -Method Post -ContentType 'application/json' -Body $body2
+            if ($saved2.restartRequired) { throw 'Second save unexpectedly required restart.' }
+
+            $backups = Invoke-RestMethod 'http://127.0.0.1:8189/api/setup/backups'
+            if (-not $backups.backups -or $backups.backups.Count -lt 1) { throw 'Automatic config backup was not created.' }
+            $restoreBody = @{ name = $backups.backups[0].name } | ConvertTo-Json
+            $restored = Invoke-RestMethod 'http://127.0.0.1:8189/api/setup/backups/restore' -Method Post -ContentType 'application/json' -Body $restoreBody
+            if (-not $restored.restartRequired) { throw 'Full backup restore must require restart.' }
+
+            $restoredFile = Get-Content (Join-Path $backend 'wayward-imagegen.config.json') -Raw | ConvertFrom-Json
+            if ($restoredFile.steps -ne 31) { throw 'Restored config file did not contain the backed-up step value.' }
           }
           finally {
             try { Invoke-RestMethod 'http://127.0.0.1:8189/api/control/shutdown' -Method Post -TimeoutSec 2 | Out-Null } catch { }
