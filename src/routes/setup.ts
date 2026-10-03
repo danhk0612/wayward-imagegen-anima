@@ -36,6 +36,7 @@ export interface SetupSettings {
   positivePromptSuffix: string
   negativePromptPrefix: string
   negativePromptSuffix: string
+  characterLoras: LoraSpec[]
   characterDirs: string[]
   characterProfiles: Record<string, CharacterProfile>
 }
@@ -159,6 +160,12 @@ function normalizeSettings(value: unknown): SetupSettings {
   if (imagePreset !== 'anima') throw new HttpError(400, 'setup UI currently supports the anima preset only')
 
   const characterProfiles = normalizeProfiles(typed.characterProfiles ?? {})
+  const rawGlobalLoras = typed.characterLoras ?? []
+  if (!Array.isArray(rawGlobalLoras)) throw new HttpError(400, 'characterLoras must be an array')
+  if (rawGlobalLoras.length > MAX_LORAS_PER_PROFILE) {
+    throw new HttpError(400, 'characterLoras has too many entries')
+  }
+  const characterLoras = rawGlobalLoras.map(item => normalizeLora(item, 'global'))
   const characterDirs = normalizeCharacterDirs(
     typed.characterDirs ?? Object.keys(characterProfiles),
     Object.keys(characterProfiles),
@@ -195,6 +202,7 @@ function normalizeSettings(value: unknown): SetupSettings {
     positivePromptSuffix: promptField(typed.positivePromptSuffix, 'positivePromptSuffix'),
     negativePromptPrefix: promptField(typed.negativePromptPrefix, 'negativePromptPrefix'),
     negativePromptSuffix: promptField(typed.negativePromptSuffix, 'negativePromptSuffix'),
+    characterLoras,
     characterDirs,
     characterProfiles,
   }
@@ -221,6 +229,7 @@ function currentSettings(config: Config): SetupSettings {
       ? 'worst quality, low quality, score_1, score_2, score_3, bad anatomy, bad hands, text, watermark, signature'
       : config.negativePromptPrefix,
     negativePromptSuffix: config.negativePromptSuffix,
+    characterLoras: firstAnimaSetup ? [] : config.characterLoras,
     characterDirs: [...config.characterDirs],
     characterProfiles: firstAnimaSetup ? {} : config.characterProfiles,
   }
@@ -482,6 +491,11 @@ export function registerSetupRoutes(router: Router, config: Config, cache: Cache
 
     const loraChoices = inputChoices(info.LoraLoaderModelOnly, 'lora_name')
       ?? inputChoices(info.LoraLoader, 'lora_name')
+    for (const lora of settings.characterLoras) {
+      if (!loraChoices?.includes(lora.name)) {
+        errors.push(`공통 LoRA를 찾을 수 없습니다: ${lora.name}`)
+      }
+    }
     for (const [characterId, profile] of Object.entries(settings.characterProfiles)) {
       if (profile.loras.length === 0) {
         warnings.push(`${characterId}: 캐릭터 LoRA가 설정되지 않았습니다.`)
