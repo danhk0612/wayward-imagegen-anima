@@ -428,11 +428,22 @@ export function registerSetupRoutes(router: Router, config: Config, cache: Cache
     requireLocal(ctx)
     const body = await readJson<{ settings?: unknown }>(ctx.req, SETUP_BODY_LIMIT)
     const settings = normalizeSettings(body.settings)
+    const restartRequired = settings.comfyUrl !== config.comfyUrl
     const { backupPath } = writeSettings(config, settings)
+
+    // All setup fields except the ComfyUI client endpoint are read through the
+    // shared Config object at render time, so they can take effect immediately.
+    // A changed ComfyUI URL still needs a restart because JobRunner owns a
+    // ComfyClient created when the server starts.
+    if (!restartRequired) {
+      Object.assign(config, settings)
+    }
+
     sendJson(ctx.res, 200, {
       ok: true,
       backupPath,
-      restartRequired: true,
+      restartRequired,
+      appliedImmediately: !restartRequired,
       settings,
     })
   })
