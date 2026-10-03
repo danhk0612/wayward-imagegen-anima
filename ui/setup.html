@@ -89,6 +89,12 @@ textarea{min-height:80px;resize:vertical}.inline{display:flex;gap:8px;align-item
       </div>
     </div>
     <div class="card">
+      <h2>공통 / 스타일 LoRA</h2>
+      <div class="hint">선택 사항입니다. 여기에 추가한 model-only LoRA는 모든 캐릭터에 공통 적용됩니다. 캐릭터 전용 LoRA는 2단계에서 설정하세요.</div>
+      <div id="globalLoras"></div>
+      <button id="addGlobalLora">+ 공통 LoRA 추가</button>
+    </div>
+    <div class="card">
       <h2>전역 프롬프트</h2>
       <div class="row"><label>Positive prefix</label><textarea id="positivePrefix"></textarea></div>
       <div class="row"><label>Positive suffix</label><textarea id="positiveSuffix"></textarea></div>
@@ -202,6 +208,27 @@ function profileTemplate(id,p={}){
   box.querySelector('.addLora').onclick=()=>addLora();
   return box;
 }
+function globalLoraRow(spec={name:'',strengthModel:.5}){
+  const row=document.createElement('div');row.className='lora-row global-lora-row';
+  const sel=document.createElement('select');sel.className='lname';fillSelect(sel,options.loras,spec.name||'');
+  const strength=document.createElement('input');strength.className='lstrength';strength.type='number';strength.step='.05';strength.min='-4';strength.max='4';strength.value=spec.strengthModel??.5;
+  const del=document.createElement('button');del.textContent='삭제';del.onclick=()=>row.remove();
+  row.append(sel,strength,del);
+  return row;
+}
+function renderGlobalLoras(){
+  $('globalLoras').innerHTML='';
+  for(const spec of (settings.characterLoras||[]))$('globalLoras').append(globalLoraRow(spec));
+}
+function readGlobalLoras(){
+  return [...document.querySelectorAll('.global-lora-row')].map(row=>({
+    name:row.querySelector('.lname').value,
+    strengthModel:Number(row.querySelector('.lstrength').value),
+    strengthClip:Number(row.querySelector('.lstrength').value)
+  })).filter(x=>x.name);
+}
+$('addGlobalLora').onclick=()=>$('globalLoras').append(globalLoraRow());
+
 function renderProfiles(){
   $('profiles').innerHTML='';
   for(const [id,p] of Object.entries(settings.characterProfiles||{}))$('profiles').append(profileTemplate(id,p));
@@ -309,6 +336,7 @@ function collect(){
     positivePromptSuffix:$('positiveSuffix').value,
     negativePromptPrefix:$('negativePrefix').value,
     negativePromptSuffix:$('negativeSuffix').value,
+    characterLoras:readGlobalLoras(),
     characterDirs:[...new Set([...(settings.characterDirs||[]),...Object.keys(profiles)])],
     characterProfiles:profiles
   };
@@ -329,13 +357,14 @@ function applySettingsToForm(s){
   $('positiveSuffix').value=s.positivePromptSuffix||'';
   $('negativePrefix').value=s.negativePromptPrefix||'';
   $('negativeSuffix').value=s.negativePromptSuffix||'';
+  renderGlobalLoras();
   renderProfiles();
 }
 
 function buildSummary(){
   const s=collect();
   $('summary').textContent=
-    `ComfyUI: ${s.comfyUrl}\nModel: ${s.animaModel}\nEncoder: ${s.animaTextEncoder}\nVAE: ${s.animaVae}\nResolution: ${s.animaDimensions||'게임 요청 사용'}\nRender: ${s.steps} steps / CFG ${s.cfg} / ${s.sampler} / ${s.scheduler}\nCharacters: ${Object.keys(s.characterProfiles).join(', ')||'(없음)'}`;
+    `ComfyUI: ${s.comfyUrl}\nModel: ${s.animaModel}\nEncoder: ${s.animaTextEncoder}\nVAE: ${s.animaVae}\nResolution: ${s.animaDimensions||'게임 요청 사용'}\nRender: ${s.steps} steps / CFG ${s.cfg} / ${s.sampler} / ${s.scheduler}\nGlobal LoRA: ${s.characterLoras.length}\nCharacters: ${Object.keys(s.characterProfiles).join(', ')||'(없음)'}`;
 }
 $('validateSetup').onclick=async()=>{
   $('validationResult').textContent='검사 중…';
