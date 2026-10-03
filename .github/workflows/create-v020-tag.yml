@@ -1,0 +1,33 @@
+name: Create v0.2.0 tag
+
+on:
+  push:
+    branches:
+      - task/tray-idle-v020
+    paths:
+      - .github/workflows/create-v020-tag.yml
+
+permissions:
+  contents: write
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout release commit
+        uses: actions/checkout@v4
+        with:
+          ref: c98bc96e22f730e08de58a6a27af7f3ccbe7a1cf
+          fetch-depth: 0
+      - name: Create v0.2.0 tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git ls-remote --exit-code --tags origin refs/tags/v0.2.0 >/dev/null 2>&1; then
+            echo "v0.2.0 already exists; refusing to move it."
+            exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a v0.2.0 c98bc96e22f730e08de58a6a27af7f3ccbe7a1cf -m "v0.2.0"
+          git push origin refs/tags/v0.2.0
