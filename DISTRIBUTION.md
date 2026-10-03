@@ -32,6 +32,13 @@ Wayward itself.
 After setup, normal use is simply: start ComfyUI, then double-click
 `Wayward-Anima.cmd`.
 
+The backend is intentionally independent from the browser game and can keep
+pre-generating after the game tab closes. Use `Wayward-Anima-Server.cmd` to
+see whether that hidden backend is still running, inspect batch progress and
+active jobs, or start/stop/restart the backend without opening the game. The
+manager refuses to stop port 8189 when it belongs to a different Wayward
+installation.
+
 For development/test installs, `scripts/install-portable-to-wayward.ps1` can
 update an existing Portable installation in place. It preserves the configured
 image/state directories (including custom relative paths) and config file,
@@ -45,6 +52,8 @@ Wayward/
   index.html
   Wayward-Anima.cmd
   Wayward-Anima.ps1
+  Wayward-Anima-Server.cmd
+  Wayward-Anima-Server.ps1
   wayward-imagegen/
     wayward-imagegen.exe
     ui/
