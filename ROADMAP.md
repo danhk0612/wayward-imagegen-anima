@@ -39,10 +39,11 @@ Completed:
 - Setup UI guidance and launcher/update flow verified on Windows PowerShell; CI also parses all PowerShell scripts with Windows PowerShell 5.1.
 - Runtime integration smoke verifies on-demand generation and pre-generation for a character with no static image pack.
 - Runtime integration smoke verifies cancelling a running backend-owned batch render leaves completed generated art unchanged.
+- Full HTTP shutdown lifecycle smoke verifies an active backend-owned batch render is interrupted, the server closes, and previously completed art remains unchanged.
 
 ## Before 0.2.0 release
 
-- Verify the full HTTP shutdown path once while a batch render is actively running.
+- Create the `v0.2.0` tag after the final main-branch CI is green; the tag workflow will publish Lite/Portable ZIPs and SHA256 checksums.
 
 ## Optional later work
 
