@@ -28,7 +28,7 @@ import { registerControlRoutes } from './routes/control.ts'
 import { BatchQueue } from './batch/queue.ts'
 import { registerBatchRoutes } from './batch/routes.ts'
 
-export const VERSION = '0.1.0'
+export const VERSION = '0.2.0'
 
 export interface ServerHandle {
   server: http.Server
@@ -149,7 +149,13 @@ export async function startServer(config: Config): Promise<ServerHandle> {
     batch,
     shutdown: () => requestShutdown(),
   })
-  const uiDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'ui')
+  const uiCandidates = [
+    path.resolve(process.cwd(), 'ui'),
+    path.resolve(path.dirname(process.execPath), 'ui'),
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'ui'),
+  ]
+  const uiDir = uiCandidates.find(candidate => fs.existsSync(path.join(candidate, 'index.html')))
+    ?? uiCandidates[0]
 
   const server = http.createServer((req, res) => {
     void handle(req, res).catch(err => {
