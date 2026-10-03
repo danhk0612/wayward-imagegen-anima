@@ -26,6 +26,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
+      - name: Windows PowerShell 5.1 script parse
+        shell: powershell
+        run: |
+          $scripts = Get-ChildItem scripts -Filter '*.ps1' -File
+          foreach ($script in $scripts) {
+            $text = Get-Content $script.FullName -Raw
+            $null = [scriptblock]::Create($text)
+            Write-Host "OK $($script.Name)"
+          }
       - name: Build Portable ZIP
         shell: pwsh
         run: ./scripts/build-portable-release.ps1
