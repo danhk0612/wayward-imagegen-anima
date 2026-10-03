@@ -264,6 +264,12 @@ function profileTemplate(id,p={}){
     <div class="row"><label>Trigger Prompt</label><div><input class="trigger"><div class="inline" style="margin-top:6px"><button class="readTriggerMetadata">LoRA metadata에서 찾기</button></div><div class="triggerMetaStatus hint" style="margin-top:6px">LoRA 제작자가 지정한 활성화 token/tag만 넣습니다. 예: queen_shua. metadata에 명시된 trigger가 있으면 후보를 읽어올 수 있습니다.</div></div></div>
     <div class="row"><label>기본 캐릭터 Prompt</label><div><textarea class="base"></textarea><div class="hint">모든 장면에서 변하지 않는 외형/정체성만 넣습니다. 머리·눈·체형·고유 장식 등. 포즈·표정·복장·배경·행동은 Wayward 장면 프롬프트에 맡깁니다.</div></div></div>
     <div class="row"><label>게임 기본 Prompt 제거</label><div><textarea class="strip"></textarea><div class="inline"><button class="analyseGamePrompt">실제 게임 Prompt에서 자동 분석</button><button class="applyGamePrompt" hidden>추천값 적용</button></div><div class="gamePromptStatus hint" style="margin-top:6px">기존 Wayward 캐릭터 identity가 새 LoRA와 충돌할 때만 제거합니다. 정확한 앞부분(prefix)만 제거하며 중간 태그는 삭제하지 않습니다.</div></div></div>
+    <details class="promptPreview"><summary>Prompt 변환 미리보기</summary>
+      <div class="hint" style="margin-top:8px">실제 Wayward Prompt가 새 캐릭터 설정을 거쳐 어떻게 바뀌는지 렌더 없이 확인합니다.</div>
+      <textarea class="previewGamePrompt" placeholder="Wayward가 보내는 원본 Prompt"></textarea>
+      <div class="inline" style="margin-top:8px"><button class="loadLatestPrompt">최근 실제 Prompt 불러오기</button><button class="previewComposition">최종 Prompt 계산</button></div>
+      <div class="previewStatus status" style="margin-top:8px">최근 생성 기록을 불러오거나 원본 Prompt를 직접 붙여넣으세요.</div>
+    </details>
     <details><summary>고급 캐릭터 프롬프트</summary>
       <div class="row"><label>Positive prefix</label><textarea class="ppre"></textarea></div>
       <div class="row"><label>Positive suffix</label><textarea class="psuf"></textarea></div>
@@ -387,6 +393,50 @@ function profileTemplate(id,p={}){
       status.className='gamePromptStatus hint err';
     }
   };
+  box.querySelector('.loadLatestPrompt').onclick=async()=>{
+    const characterId=escId(box.querySelector('.pid').value);
+    const status=box.querySelector('.previewStatus');
+    if(!characterId){status.textContent='캐릭터 ID를 먼저 입력하세요.';status.className='previewStatus status err';return;}
+    try{
+      const b=await api('/api/setup/prompt-analysis?characterId='+encodeURIComponent(characterId));
+      if(!b.latestPrompt){
+        status.textContent='아직 실제 생성 Prompt가 없습니다. 게임에서 이미지를 하나 생성하거나 Prompt를 직접 붙여넣으세요.';
+        status.className='previewStatus status';
+        return;
+      }
+      box.querySelector('.previewGamePrompt').value=b.latestPrompt;
+      status.textContent='최근 실제 Wayward Prompt를 불러왔습니다. "최종 Prompt 계산"으로 변환 결과를 확인하세요.';
+      status.className='previewStatus status ok';
+    }catch(e){
+      status.textContent='최근 Prompt 불러오기 실패: '+e.message;
+      status.className='previewStatus status err';
+    }
+  };
+  box.querySelector('.previewComposition').onclick=async()=>{
+    const characterId=escId(box.querySelector('.pid').value);
+    const raw=box.querySelector('.previewGamePrompt').value.trim();
+    const status=box.querySelector('.previewStatus');
+    if(!characterId){status.textContent='캐릭터 ID를 먼저 입력하세요.';status.className='previewStatus status err';return;}
+    if(!raw){status.textContent='Wayward 원본 Prompt를 입력하거나 최근 Prompt를 불러오세요.';status.className='previewStatus status err';return;}
+    status.textContent='현재 설정으로 Prompt를 계산 중…';
+    status.className='previewStatus status';
+    try{
+      const b=await api('/api/setup/prompt-preview',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({settings:collect(),characterId,prompt:raw,negativePrompt:''})
+      });
+      status.textContent=
+        '원본 Wayward Prompt:\n'+b.rawPrompt+
+        '\n\n게임 고정 prefix 제거 후 Scene Prompt:\n'+b.scenePrompt+
+        '\n\nAnima에 전달되는 최종 Positive Prompt:\n'+b.finalTextPrompt;
+      status.className='previewStatus status ok';
+    }catch(e){
+      status.textContent='Prompt 미리보기 실패: '+e.message;
+      status.className='previewStatus status err';
+    }
+  };
+
   box.querySelector('.applyGamePrompt').onclick=()=>{
     const suggested=box.dataset.suggestedStrip||'';
     if(!suggested)return;
