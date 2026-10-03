@@ -19,6 +19,8 @@ jobs:
         run: bun scripts/ui-smoke.ts
       - name: Runtime integration smoke test
         run: bun scripts/runtime-integration-smoke.ts
+      - name: Active HTTP shutdown lifecycle smoke test
+        run: bun scripts/http-lifecycle-smoke.ts
       - name: Lite package smoke
         shell: pwsh
         run: ./scripts/build-lite-release.ps1
