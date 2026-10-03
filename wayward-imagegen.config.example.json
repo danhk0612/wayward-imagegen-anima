@@ -29,6 +29,9 @@
   "maxDiskGb": 0,
   "maxQueued": 64,
   "maxImagesPerHour": 400,
+  "_idle_shutdown_note": "Optional. Disabled by default. When enabled, the backend exits only after this many minutes without a game request and only when no foreground/batch/backend-owned ComfyUI work remains.",
+  "idleShutdownEnabled": false,
+  "idleShutdownMinutes": 30,
   "allowDelete": false,
   "_wan_note": "Set this to an image-to-video workflow exported from ComfyUI in API format to enable video.",
   "wanWorkflowPath": ""

@@ -112,6 +112,11 @@ export class JobRunner {
     return [...this.jobs.values()].filter(j => isActive(j))
   }
 
+  /** Submissions between the dedup claim and ComfyUI job registration. */
+  pendingSubmissionCount(): number {
+    return this.pendingSubmissions.size
+  }
+
   /** How many interactive jobs are waiting — used to refuse an overlong queue. */
   queuedCount(): number {
     return this.activeJobs().filter(j => !j.bulk).length

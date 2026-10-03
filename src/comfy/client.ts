@@ -48,6 +48,13 @@ interface QueueResponse {
 
 export type QueueState = 'running' | 'pending' | 'missing' | 'unknown'
 
+export interface OwnedQueueState {
+  /** null is reserved for runtime status that has not been checked yet. */
+  reachable: boolean | null
+  pending: number
+  running: number
+}
+
 /** One node class as `/object_info` describes it. */
 export interface ObjectInfoEntry {
   output_node?: boolean
@@ -298,12 +305,35 @@ export class ComfyClient {
 
   async queue(): Promise<QueueResponse | null> {
     try {
-      const res = await fetch(`${this.baseUrl}/queue`)
+      const res = await fetch(`${this.baseUrl}/queue`, {
+        signal: AbortSignal.timeout(3000),
+      })
       if (!res.ok) return null
       return await res.json() as QueueResponse
     } catch {
       return null
     }
+  }
+
+  /**
+   * One authoritative snapshot of backend-owned ComfyUI work.
+   *
+   * Runtime status and idle shutdown use this instead of independently probing
+   * pending/running queues, so ownership cannot be inferred two different ways.
+   */
+  async ownedQueueState(): Promise<OwnedQueueState> {
+    const q = await this.queue()
+    if (!q) return { reachable: false, pending: 0, running: 0 }
+
+    let pending = 0
+    let running = 0
+    for (const entry of q.queue_pending ?? []) {
+      if (isOwnQueueEntry(entry)) pending++
+    }
+    for (const entry of q.queue_running ?? []) {
+      if (isOwnQueueEntry(entry)) running++
+    }
+    return { reachable: true, pending, running }
   }
 
   async queueStateOf(promptId: string): Promise<QueueState> {

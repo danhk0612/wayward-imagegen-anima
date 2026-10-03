@@ -17,6 +17,8 @@ jobs:
         run: bun scripts/smoke.ts
       - name: Browser UI smoke test
         run: bun scripts/ui-smoke.ts
+      - name: Idle shutdown state smoke test
+        run: bun scripts/idle-shutdown-smoke.ts
       - name: Runtime integration smoke test
         run: bun scripts/runtime-integration-smoke.ts
       - name: Active HTTP shutdown lifecycle smoke test
@@ -58,7 +60,10 @@ jobs:
           if (-not $stage) { throw 'Portable staging directory not found.' }
           $manager = Join-Path $stage.FullName 'Wayward-Anima-Server.ps1'
           $managerCmd = Join-Path $stage.FullName 'Wayward-Anima-Server.cmd'
+          $tray = Join-Path $stage.FullName 'Wayward-Anima-Tray.ps1'
+          $trayCmd = Join-Path $stage.FullName 'Wayward-Anima-Tray.cmd'
           if (-not (Test-Path $manager) -or -not (Test-Path $managerCmd)) { throw 'Server manager entry points are missing.' }
+          if (-not (Test-Path $tray) -or -not (Test-Path $trayCmd)) { throw 'Tray manager entry points are missing.' }
 
           & $manager -Action Status -GameRoot $stage.FullName
           & $manager -Action Start -GameRoot $stage.FullName
@@ -74,6 +79,23 @@ jobs:
           if (-not $ready) { throw 'Server manager did not start the target backend.' }
 
           & $manager -Action Status -GameRoot $stage.FullName
+
+          # A manager pointed at a different Wayward root must refuse to stop
+          # the backend that belongs to this stage.
+          $foreignRoot = Join-Path $env:RUNNER_TEMP 'Wayward-foreign-owner'
+          New-Item -ItemType Directory -Path $foreignRoot -Force | Out-Null
+          $refused = $false
+          try {
+            & $manager -Action Stop -GameRoot $foreignRoot
+          }
+          catch {
+            $refused = $true
+          }
+          if (-not $refused) { throw 'Foreign Wayward manager did not refuse to stop the target backend.' }
+          if (-not (Get-NetTCPConnection -LocalPort 8189 -State Listen -ErrorAction SilentlyContinue)) {
+            throw 'Foreign Wayward manager stopped another installation backend.'
+          }
+
           & $manager -Action Stop -GameRoot $stage.FullName
           Start-Sleep -Milliseconds 500
           if (Get-NetTCPConnection -LocalPort 8189 -State Listen -ErrorAction SilentlyContinue) {
@@ -178,6 +200,8 @@ jobs:
             $before = Invoke-RestMethod 'http://127.0.0.1:8189/api/setup/settings'
             $settings = $before.settings
             $settings.steps = 31
+            $settings.idleShutdownEnabled = $true
+            $settings.idleShutdownMinutes = 15
             $settings.characterProfiles = @{
               test = @{
                 loras = @()
@@ -199,6 +223,11 @@ jobs:
             $after = Invoke-RestMethod 'http://127.0.0.1:8189/api/setup/settings'
             if ($after.settings.steps -ne 31) { throw 'Live setup step change was not visible.' }
             if (-not $after.settings.characterProfiles.test) { throw 'Live character profile change was not visible.' }
+
+            $runtime = Invoke-RestMethod 'http://127.0.0.1:8189/api/control/status'
+            if ($runtime.instance.configPath -notmatch 'Wayward-Anima-ImageGen-Portable') { throw 'Runtime status did not expose installation identity.' }
+            if (-not $runtime.idleShutdown.enabled -or $runtime.idleShutdown.minutes -ne 15) { throw 'Idle shutdown setup did not apply live.' }
+            if (-not $runtime.lastGameRequestAt) { throw 'Runtime status did not expose last game request time.' }
 
             # A second save should create an automatic backup of the first
             # config; restoring it writes that full JSON back atomically.

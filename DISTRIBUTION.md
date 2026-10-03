@@ -30,14 +30,26 @@ Wayward itself.
    backend restart.
 
 After setup, normal use is simply: start ComfyUI, then double-click
-`Wayward-Anima.cmd`.
+`Wayward-Anima.cmd`. It starts the backend, starts one tray manager for that
+Wayward root, and opens the game. Closing the game/browser does not implicitly
+stop the backend.
 
-The backend is intentionally independent from the browser game and can keep
-pre-generating after the game tab closes. Use `Wayward-Anima-Server.cmd` to
-see whether that hidden backend is still running, inspect batch progress and
-active jobs, or start/stop/restart the backend without opening the game. The
-manager refuses to stop port 8189 when it belongs to a different Wayward
-installation.
+The tray icon shows the canonical backend state reported by
+`/api/control/status`: running, generating, or paused. Its menu provides
+status, server start/stop/restart, setup, and Wayward launch actions. The tray
+reuses `Wayward-Anima-Server.ps1` for those commands; it does not implement a
+second lifecycle policy. `Wayward-Anima-Server.cmd` remains the console
+alternative. Both refuse to stop port 8189 when it belongs to a different
+Wayward installation.
+
+Idle automatic shutdown is optional and OFF by default. When enabled in the
+setup UI, the timer is based on the last Wayward/game request. Shutdown is
+allowed only after the configured idle interval and only when there is no
+foreground generation, no backend job/submission, no running or incomplete
+batch (a paused unfinished batch also blocks shutdown), and no backend-owned
+ComfyUI queue/running work. If ComfyUI ownership cannot be checked, automatic
+shutdown fails closed and leaves the backend running. This means overnight
+pre-generation is not interrupted.
 
 For development/test installs, `scripts/install-portable-to-wayward.ps1` can
 update an existing Portable installation in place. It preserves the configured
@@ -54,6 +66,8 @@ Wayward/
   Wayward-Anima.ps1
   Wayward-Anima-Server.cmd
   Wayward-Anima-Server.ps1
+  Wayward-Anima-Tray.cmd
+  Wayward-Anima-Tray.ps1
   wayward-imagegen/
     wayward-imagegen.exe
     ui/
@@ -73,6 +87,10 @@ Wayward/
   index.html
   Wayward-Anima.cmd
   Wayward-Anima.ps1
+  Wayward-Anima-Server.cmd
+  Wayward-Anima-Server.ps1
+  Wayward-Anima-Tray.cmd
+  Wayward-Anima-Tray.ps1
   wayward-imagegen/
     src/
     ui/
@@ -84,6 +102,26 @@ Wayward/
 ```
 
 Lite additionally requires Bun in PATH.
+
+## Update, stop, and recovery
+
+- **Update:** use the safe Portable installer/update path. It replaces runtime
+  files while preserving `wayward-imagegen.config.json`, the configured image
+  library, state/batch data and static-pack state. It only auto-stops an idle
+  backend proven to belong to the selected Wayward root.
+- **Normal stop:** choose **서버 종료** from the tray or use
+  `Wayward-Anima-Server.cmd` -> Stop. Active backend-owned work is cancelled
+  through the graceful control endpoint and an unfinished batch is paused.
+- **Tray problem:** exit/restart only the tray with `Wayward-Anima-Tray.cmd`.
+  The tray is not the backend; restarting it does not delete or reset images.
+- **Backend problem:** use `Wayward-Anima-Server.cmd` -> Status first. If the
+  reported config path belongs to another Wayward installation, do not terminate
+  that PID; resolve the port conflict instead.
+- **Configuration problem:** open setup and restore an automatic config backup.
+  A full backup restore requires one backend restart.
+- **Generated art:** routine install/update/restart does not reset generated
+  images. Character generated-art deletion remains a separate explicit,
+  confirmation-protected action.
 
 ## Safety / reversibility
 

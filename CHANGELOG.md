@@ -21,6 +21,9 @@ First browser-configurable Anima-focused release.
 - Setup JSON import/export and automatic config backup/restore.
 - Batch pause/resume/clear, backend-owned ComfyUI cancellation and graceful shutdown.
 - External `Wayward-Anima-Server.cmd` manager for persistent backend status/start/stop/restart after the game/browser has closed.
+- Dependency-free Windows tray server manager with visible running/generating/paused state and status/start/stop/restart/setup/game actions.
+- Optional idle backend shutdown, disabled by default, with foreground/batch/paused-batch/backend-owned ComfyUI safety gates.
+- Canonical `/api/control/status` runtime snapshot with installation identity, last game request, jobs, batch state and idle-shutdown countdown/blockers.
 - Standalone Windows Portable package that does not require Bun at runtime.
 - Lite source package for Bun users.
 - Safe Portable updater that preserves config, generated images and configured state paths.
@@ -37,3 +40,4 @@ First browser-configurable Anima-focused release.
 - Static image packs are moved to a reversible backup location rather than deleted.
 - Portable updates only auto-stop an idle backend that is proven to belong to the selected Wayward root.
 - CI validates Portable compilation, setup UI serving, config backup/restore, image-pack round trips and runtime-data preservation.
+- CI verifies idle-shutdown allow/block conditions, active/paused batch protection, tray packaging/PowerShell 5.1 parsing and cross-install server ownership refusal.

@@ -7,6 +7,7 @@
 
 import type { BatchQueue } from '../batch/queue.ts'
 import type { JobRunner } from '../comfy/jobRunner.ts'
+import type { RuntimeActivity } from '../runtime/activity.ts'
 import { Router, sendJson, HttpError, type RequestContext } from '../http/router.ts'
 
 function requireLocal(ctx: RequestContext): void {
@@ -22,20 +23,13 @@ export function registerControlRoutes(
   deps: {
     batch: BatchQueue
     jobs: JobRunner
+    runtime: RuntimeActivity
     shutdown: () => void
   },
 ): void {
   router.get('/api/control/status', ctx => {
     requireLocal(ctx)
-    sendJson(ctx.res, 200, {
-      batch: deps.batch.status(),
-      activeJobs: deps.jobs.activeJobs().map(job => ({
-        promptId: job.promptId,
-        talentName: job.talentName,
-        status: job.status,
-        bulk: job.bulk === true,
-      })),
-    })
+    sendJson(ctx.res, 200, deps.runtime.snapshot())
   })
 
   router.post('/api/control/cancel-active', async ctx => {

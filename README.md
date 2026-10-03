@@ -99,7 +99,9 @@ The setup wizard can:
 - inspect image-library size/formats/WebP availability and set a disk cap,
 - pause/resume/clear pre-generation work,
 - safely cancel backend-owned ComfyUI work and shut down the backend,
-- use `Wayward-Anima-Server.cmd` outside the browser to check the hidden backend status or start/stop/restart it after the game has closed.
+- use the Windows tray icon to see `running` / `generating` / `paused` state and start/stop/restart/open setup/start Wayward,
+- optionally enable idle auto-shutdown; it is OFF by default and never stops while foreground work, an incomplete batch (including paused), or backend-owned ComfyUI work remains,
+- use `Wayward-Anima-Server.cmd` as the console alternative for the same backend status/start/stop/restart operations.
 
 Settings are written to `wayward-imagegen.config.json`. Existing settings are
 backed up automatically before the UI writes a replacement. Model, LoRA, prompt,
@@ -128,7 +130,9 @@ Two Windows packages are supported:
 - **Lite** — smaller source package for users who already have Bun installed.
 
 Neither package bundles ComfyUI, models, LoRAs, Wayward, generated images or
-development artifacts. See [DISTRIBUTION.md](./DISTRIBUTION.md).
+development artifacts. `Wayward-Anima.cmd` starts the backend and tray manager;
+the tray remains available after the browser game closes so the persistent
+backend state is visible. See [DISTRIBUTION.md](./DISTRIBUTION.md).
 
 ## Renderer backend status
 

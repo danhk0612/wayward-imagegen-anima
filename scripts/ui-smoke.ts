@@ -38,6 +38,8 @@ for (const id of [
   'globalLoras',
   'addGlobalLora',
   'maxDiskGb',
+  'idleShutdownEnabled',
+  'idleShutdownMinutes',
   'storageStatus',
   'refreshStorage',
   'exportSettings',

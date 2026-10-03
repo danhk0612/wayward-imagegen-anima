@@ -43,6 +43,7 @@ foreach ($file in @(
 
 Copy-Item (Join-Path (Join-Path $RepoRoot "scripts") "wayward-ai-launcher.ps1") (Join-Path $stage "Wayward-Anima.ps1") -Force
 Copy-Item (Join-Path (Join-Path $RepoRoot "scripts") "wayward-anima-server-manager.ps1") (Join-Path $stage "Wayward-Anima-Server.ps1") -Force
+Copy-Item (Join-Path (Join-Path $RepoRoot "scripts") "wayward-anima-tray.ps1") (Join-Path $stage "Wayward-Anima-Tray.ps1") -Force
 
 $cmd = @'
 @echo off
@@ -66,6 +67,16 @@ if errorlevel 1 pause
   [System.Text.Encoding]::ASCII
 )
 
+$trayCmd = @'
+@echo off
+start "" powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "%~dp0Wayward-Anima-Tray.ps1"
+'@
+[System.IO.File]::WriteAllText(
+  (Join-Path $stage "Wayward-Anima-Tray.cmd"),
+  $trayCmd,
+  [System.Text.Encoding]::ASCII
+)
+
 $readme = @'
 Wayward Anima ImageGen - Lite
 
@@ -74,7 +85,8 @@ Wayward Anima ImageGen - Lite
 3. Double-click Wayward-Anima.cmd.
 4. On first run, configure the Anima model, LoRA and Wayward character in the browser setup page.
 5. Later, normal startup is: ComfyUI -> Wayward-Anima.cmd.
-6. Use Wayward-Anima-Server.cmd to check whether the hidden backend is still running, or to start/stop/restart it without opening the game.
+6. Wayward-Anima.cmd also starts the Windows tray icon, which shows running/generating/paused state and provides server/setup/game actions.
+7. Wayward-Anima-Server.cmd remains the console manager. Wayward-Anima-Tray.cmd can start only the tray manager.
 
 Bun must be installed and available in PATH for the Lite package.
 ComfyUI, models, LoRAs, Wayward and generated images are not included.
