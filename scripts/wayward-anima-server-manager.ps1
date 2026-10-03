@@ -74,33 +74,71 @@ function Get-BackendIdentity {
     return [PSCustomObject]@{
       Running = $false
       Owned = $false
+      Legacy = $false
+      Busy = $false
       Pid = $null
       ConfigPath = $null
       Error = $null
     }
   }
 
+  $control = $null
+  $reported = $null
+  $legacy = $false
+  $probeError = $null
+
   try {
     $control = Invoke-RestMethod -Uri ($backendBase + "/api/control/status") -TimeoutSec 3
-    $reported = [System.IO.Path]::GetFullPath([string]$control.instance.configPath)
-    $expected = [System.IO.Path]::GetFullPath($configPath)
-    $owned = [string]::Equals($reported, $expected, [System.StringComparison]::OrdinalIgnoreCase)
-    return [PSCustomObject]@{
-      Running = $true
-      Owned = $owned
-      Pid = $port.OwningProcess
-      ConfigPath = $reported
-      Error = $null
+    if ($control.instance -and -not [string]::IsNullOrWhiteSpace([string]$control.instance.configPath)) {
+      $reported = [System.IO.Path]::GetFullPath([string]$control.instance.configPath)
+    }
+    else {
+      $legacy = $true
     }
   }
   catch {
+    $legacy = $true
+    $probeError = $_.Exception.Message
+  }
+
+  if (-not $reported) {
+    try {
+      $setup = Invoke-RestMethod -Uri ($backendBase + "/api/setup/settings") -TimeoutSec 3
+      if (-not [string]::IsNullOrWhiteSpace([string]$setup.configPath)) {
+        $reported = [System.IO.Path]::GetFullPath([string]$setup.configPath)
+      }
+    }
+    catch {
+      if (-not $probeError) { $probeError = $_.Exception.Message }
+    }
+  }
+
+  if ($reported) {
+    $expected = [System.IO.Path]::GetFullPath($configPath)
+    $owned = [string]::Equals($reported, $expected, [System.StringComparison]::OrdinalIgnoreCase)
+    $busy = $false
+    if ($control) {
+      $busy = (@($control.activeJobs).Count -gt 0) -or [bool]$control.batch.running
+    }
     return [PSCustomObject]@{
       Running = $true
-      Owned = $false
+      Owned = $owned
+      Legacy = $legacy
+      Busy = $busy
       Pid = $port.OwningProcess
-      ConfigPath = $null
-      Error = $_.Exception.Message
+      ConfigPath = $reported
+      Error = $probeError
     }
+  }
+
+  return [PSCustomObject]@{
+    Running = $true
+    Owned = $false
+    Legacy = $legacy
+    Busy = $false
+    Pid = $port.OwningProcess
+    ConfigPath = $null
+    Error = $probeError
   }
 }
 
@@ -145,26 +183,33 @@ function Show-Status {
   Write-Host "PID       : $($identity.Pid)"
   Write-Host "Config    : $($identity.ConfigPath)"
   Write-Host "ComfyUI   : $(if ($comfy) { 'ONLINE' } else { 'OFFLINE' }) ($comfyUrl)"
+  if ($identity.Legacy) {
+    Write-Host "Runtime   : older backend detected; restart this server to load the current package." -ForegroundColor Yellow
+  }
 
   $control = Get-ControlStatus
   if ($control) {
     $batch = $control.batch
     $active = @($control.activeJobs).Count
-    Write-Host "Runtime   : $($control.state)"
+    if (-not $identity.Legacy) {
+      Write-Host "Runtime   : $($control.state)"
+    }
     Write-Host "Batch     : running=$($batch.running) paused=$($batch.paused) progress=$($batch.done)/$($batch.total)"
     Write-Host "Current   : $(if ($batch.currentKey) { $batch.currentKey } else { '-' })"
     Write-Host "AI jobs   : $active"
-    if ($control.idleShutdown.enabled) {
-      $blocked = @($control.idleShutdown.blockedBy)
-      if ($blocked.Count -gt 0) {
-        Write-Host "Auto stop : waiting ($($blocked -join ', '))"
+    if (-not $identity.Legacy) {
+      if ($control.idleShutdown.enabled) {
+        $blocked = @($control.idleShutdown.blockedBy)
+        if ($blocked.Count -gt 0) {
+          Write-Host "Auto stop : waiting ($($blocked -join ', '))"
+        }
+        else {
+          Write-Host "Auto stop : $($control.idleShutdown.remainingSeconds)s remaining"
+        }
       }
       else {
-        Write-Host "Auto stop : $($control.idleShutdown.remainingSeconds)s remaining"
+        Write-Host "Auto stop : OFF"
       }
-    }
-    else {
-      Write-Host "Auto stop : OFF"
     }
   }
   return $identity
