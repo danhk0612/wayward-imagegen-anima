@@ -184,9 +184,15 @@ document.querySelectorAll('.stepbtn').forEach(b=>b.onclick=()=>setPage(Number(b.
 $('prev').onclick=()=>setPage(page-1);$('next').onclick=()=>setPage(page+1);
 
 function fillSelect(el, values, selected){
-  const uniq=[...new Set([selected,...(values||[])].filter(Boolean))];
+  const list=values||[];
+  const uniq=[...new Set([selected,...list].filter(Boolean))];
   el.innerHTML='';
-  for(const v of uniq){const o=document.createElement('option');o.value=v;o.textContent=v;el.append(o);}
+  for(const v of uniq){
+    const o=document.createElement('option');
+    o.value=v;
+    o.textContent=v+(list.length&&v===selected&&!list.includes(v)?' · 현재 ComfyUI 목록에 없음':'');
+    el.append(o);
+  }
   if(selected)el.value=selected;
 }
 function chooseDetected(values,current,patterns=[]){
