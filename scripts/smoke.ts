@@ -22,6 +22,7 @@ fs.writeFileSync(configPath, JSON.stringify({
   cfg: 4.5,
   sampler: 'er_sde',
   scheduler: 'simple',
+  characterLoras: [{ name: 'style.safetensors', strengthModel: 0.4, strengthClip: 0.4 }],
   characterProfiles: {
     elena: {
       loras: [{ name: 'elena.safetensors', strengthModel: 0.85 }],
@@ -77,6 +78,9 @@ const negative = nodes.find(n => n.class_type === 'CLIPTextEncode' && String(n.i
 assert(negative, 'Generic complex-scene negative hint must be applied')
 assert(positiveText.indexOf('elena_trigger') < positiveText.indexOf('1boy'), 'Character identity prompt must precede the dynamic scene')
 
+const globalStyleLora = nodes.find(n => n.class_type === 'LoraLoaderModelOnly' && n.inputs?.lora_name === 'style.safetensors')
+assert(globalStyleLora, 'Global style LoRA must be applied to native Anima')
+assert(Math.abs(Number(globalStyleLora.inputs?.strength_model) - 0.4) < 1e-9, 'Complex-scene scaling must not weaken a global style LoRA')
 const complexLora = nodes.find(n => n.class_type === 'LoraLoaderModelOnly' && n.inputs?.lora_name === 'elena.safetensors')
 assert(complexLora, 'Complex scene must still apply the character LoRA')
 assert(Math.abs(Number(complexLora.inputs?.strength_model) - 0.68) < 1e-9, 'Complex scene must scale only the character LoRA')
