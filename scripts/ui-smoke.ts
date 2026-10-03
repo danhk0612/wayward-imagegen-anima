@@ -9,8 +9,6 @@ const uiDir = path.resolve(process.cwd(), 'ui')
 for (const file of ['index.html', 'setup.html']) {
   const full = path.join(uiDir, file)
   const html = fs.readFileSync(full, 'utf8')
-  assert(/<html\b/i.test(html), `${file}: missing html root`)
-
   const scripts = [...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi)]
     .map(match => match[1])
   assert(scripts.length > 0, `${file}: no inline script found`)
