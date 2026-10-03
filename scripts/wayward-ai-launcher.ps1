@@ -15,6 +15,7 @@ $stateDir    = Join-Path $backendRoot "images\.state"
 $stdoutLog   = Join-Path $stateDir "launcher-backend.out.log"
 $stderrLog   = Join-Path $stateDir "launcher-backend.err.log"
 $backendBase = "http://127.0.0.1:8189"
+$trayScript  = Join-Path $GameRoot "Wayward-Anima-Tray.ps1"
 
 function Test-Http([string]$Url, [int]$TimeoutSec = 2) {
   try {
@@ -104,6 +105,18 @@ function Start-Backend {
   throw "wayward-imagegen did not become ready. Check: $stderrLog"
 }
 
+function Start-Tray {
+  if (-not (Test-Path $trayScript)) { return }
+
+  $quotedTray = '"' + $trayScript + '"'
+  $quotedRoot = '"' + $GameRoot + '"'
+  Start-Process `
+    -FilePath "powershell.exe" `
+    -ArgumentList @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $quotedTray, "-GameRoot", $quotedRoot) `
+    -WorkingDirectory $GameRoot `
+    -WindowStyle Hidden | Out-Null
+}
+
 function Stop-Backend {
   if (-not (Test-Http ($backendBase + "/api/pack") 2)) { return }
 
@@ -143,6 +156,7 @@ if (-not (Test-Http ($comfyUrl + "/system_stats") 3)) {
 }
 
 Start-Backend
+Start-Tray
 
 if (Test-SetupRequired) {
   Start-Process ($backendBase + "/setup.html")
@@ -176,4 +190,5 @@ Start-Process $gameEntry
 
 Write-Host ""
 Write-Host "Wayward opened. The image backend keeps running after the game/browser closes." -ForegroundColor Cyan
-Write-Host "Use Wayward-Anima-Server.cmd to check status or stop/restart the hidden backend."
+Write-Host "The tray icon shows backend state and provides start/stop/restart/setup/game actions."
+Write-Host "Wayward-Anima-Server.cmd remains available as the console server manager."
