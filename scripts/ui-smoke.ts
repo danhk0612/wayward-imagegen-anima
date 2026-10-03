@@ -24,6 +24,10 @@ for (const file of ['index.html', 'setup.html']) {
 }
 
 const setup = fs.readFileSync(path.join(uiDir, 'setup.html'), 'utf8')
+assert(
+  setup.includes('Wayward가 이 캐릭터에 매번 앞에 붙이는 기존 고정 외형/정체성 태그만 넣습니다.'),
+  'setup.html: game prompt removal guidance is missing',
+)
 for (const id of [
   'comfyUrl',
   'discoverComfy',
