@@ -14,6 +14,7 @@ import { ComfyClient, inputChoices } from '../comfy/client.ts'
 import { Router, sendJson, HttpError, type RequestContext } from '../http/router.ts'
 import { readJson } from '../http/body.ts'
 import { buildComfyPrompt } from '../comfy/workflows/index.ts'
+import { webpAvailable } from '../comfy/media.ts'
 
 const SETUP_BODY_LIMIT = 2 * 1024 * 1024
 const MAX_PROMPT_LENGTH = 100_000
@@ -32,6 +33,7 @@ export interface SetupSettings {
   cfg: number
   sampler: string
   scheduler: string
+  maxDiskGb: number
   positivePromptPrefix: string
   positivePromptSuffix: string
   negativePromptPrefix: string
@@ -198,6 +200,7 @@ function normalizeSettings(value: unknown): SetupSettings {
     cfg: numberValue(typed.cfg, 'cfg', 0, 30),
     sampler: stringValue(typed.sampler, 'sampler').trim(),
     scheduler: stringValue(typed.scheduler, 'scheduler').trim(),
+    maxDiskGb: numberValue(typed.maxDiskGb ?? 0, 'maxDiskGb', 0, 100000),
     positivePromptPrefix: promptField(typed.positivePromptPrefix, 'positivePromptPrefix'),
     positivePromptSuffix: promptField(typed.positivePromptSuffix, 'positivePromptSuffix'),
     negativePromptPrefix: promptField(typed.negativePromptPrefix, 'negativePromptPrefix'),
@@ -221,6 +224,7 @@ function currentSettings(config: Config): SetupSettings {
     cfg: firstAnimaSetup ? 4.5 : config.cfg,
     sampler: firstAnimaSetup ? 'er_sde' : config.sampler,
     scheduler: firstAnimaSetup ? 'simple' : config.scheduler,
+    maxDiskGb: config.maxDiskGb,
     positivePromptPrefix: firstAnimaSetup
       ? 'masterpiece, best quality'
       : config.positivePromptPrefix,
@@ -311,6 +315,29 @@ function setupOptionsFromInfo(info: Awaited<ReturnType<ComfyClient['objectInfo']
   }
 }
 
+
+function imageFormatCounts(root: string): Record<string, number> {
+  const counts: Record<string, number> = {}
+  const walk = (dir: string): void => {
+    let entries: fs.Dirent[]
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true })
+    } catch {
+      return
+    }
+    for (const entry of entries) {
+      const full = path.join(dir, entry.name)
+      if (entry.isDirectory()) {
+        walk(full)
+        continue
+      }
+      const ext = path.extname(entry.name).toLowerCase() || '(none)'
+      counts[ext] = (counts[ext] ?? 0) + 1
+    }
+  }
+  walk(root)
+  return counts
+}
 
 function resolveWaywardRoot(config: Config): string | null {
   const backendRoot = path.dirname(config.configFilePath)
@@ -463,6 +490,19 @@ export function registerSetupRoutes(router: Router, config: Config, cache: Cache
       restartRequired,
       appliedImmediately: !restartRequired,
       settings,
+    })
+  })
+
+  router.get('/api/setup/storage', async ctx => {
+    requireLocal(ctx)
+    sendJson(ctx.res, 200, {
+      imagesDir: config.imagesDir,
+      bytes: cache.diskUsageBytes(),
+      cachedEntries: cache.size,
+      formatCounts: imageFormatCounts(config.imagesDir),
+      maxDiskGb: config.maxDiskGb,
+      webpConfigured: config.webp,
+      webpAvailable: await webpAvailable(),
     })
   })
 
