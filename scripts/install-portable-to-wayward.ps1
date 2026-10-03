@@ -14,6 +14,8 @@ $targetPs1 = Join-Path $GameRoot 'Wayward-Anima.ps1'
 $targetCmd = Join-Path $GameRoot 'Wayward-Anima.cmd'
 $targetServerPs1 = Join-Path $GameRoot 'Wayward-Anima-Server.ps1'
 $targetServerCmd = Join-Path $GameRoot 'Wayward-Anima-Server.cmd'
+$targetTrayPs1 = Join-Path $GameRoot 'Wayward-Anima-Tray.ps1'
+$targetTrayCmd = Join-Path $GameRoot 'Wayward-Anima-Tray.cmd'
 
 if (-not (Test-Path $indexHtml)) {
   throw "Wayward index.html not found: $indexHtml"
@@ -147,11 +149,11 @@ $stage = Get-ChildItem $testDist -Directory -Filter 'Wayward-Anima-ImageGen-Port
 if (-not $stage) { throw 'Portable staging directory was not created.' }
 
 $sourceBackend = Join-Path $stage.FullName 'wayward-imagegen'
-$existing = (Test-Path $targetBackend) -or (Test-Path $targetPs1) -or (Test-Path $targetCmd) -or (Test-Path $targetServerPs1) -or (Test-Path $targetServerCmd)
+$existing = (Test-Path $targetBackend) -or (Test-Path $targetPs1) -or (Test-Path $targetCmd) -or (Test-Path $targetServerPs1) -or (Test-Path $targetServerCmd) -or (Test-Path $targetTrayPs1) -or (Test-Path $targetTrayCmd)
 
 if ($FreshPlugin) {
   Write-Host '== Fresh plugin install (destructive to plugin runtime data) ==' -ForegroundColor Yellow
-  foreach ($target in @($targetBackend, $targetPs1, $targetCmd, $targetServerPs1, $targetServerCmd, (Join-Path $GameRoot 'Wayward-Anima-README.txt'))) {
+  foreach ($target in @($targetBackend, $targetPs1, $targetCmd, $targetServerPs1, $targetServerCmd, $targetTrayPs1, $targetTrayCmd, (Join-Path $GameRoot 'Wayward-Anima-README.txt'))) {
     if (Test-Path $target) { Remove-Item $target -Recurse -Force }
   }
   $existing = $false
@@ -187,6 +189,8 @@ Copy-Item (Join-Path $stage.FullName 'Wayward-Anima.ps1') $targetPs1 -Force
 Copy-Item (Join-Path $stage.FullName 'Wayward-Anima.cmd') $targetCmd -Force
 Copy-Item (Join-Path $stage.FullName 'Wayward-Anima-Server.ps1') $targetServerPs1 -Force
 Copy-Item (Join-Path $stage.FullName 'Wayward-Anima-Server.cmd') $targetServerCmd -Force
+Copy-Item (Join-Path $stage.FullName 'Wayward-Anima-Tray.ps1') $targetTrayPs1 -Force
+Copy-Item (Join-Path $stage.FullName 'Wayward-Anima-Tray.cmd') $targetTrayCmd -Force
 if (Test-Path (Join-Path $stage.FullName 'README.txt')) {
   Copy-Item (Join-Path $stage.FullName 'README.txt') (Join-Path $GameRoot 'Wayward-Anima-README.txt') -Force
 }
