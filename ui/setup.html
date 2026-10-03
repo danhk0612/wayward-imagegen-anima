@@ -190,16 +190,61 @@ function fillSelect(el, values, selected){
   if(selected)el.value=selected;
 }
 function escId(v){return String(v).toLowerCase().trim().replace(/[^a-z0-9_-]+/g,'-').replace(/^-+|-+$/g,'').slice(0,64);}
+function normalizedTag(v){return String(v).trim().toLowerCase().replace(/\s+/g,'_');}
+function loraStem(v){
+  const name=String(v).replace(/\\/g,'/').split('/').pop()||'';
+  return name.replace(/\.safetensors$/i,'').toLowerCase();
+}
+function matchKnownLora(raw){
+  const wanted=loraStem(raw);
+  return options.loras.find(x=>String(x).toLowerCase()===String(raw).toLowerCase())
+    || options.loras.find(x=>loraStem(x)===wanted)
+    || raw;
+}
+function parseRecommendedLoraPrompt(text, characterId){
+  const loras=[];
+  const withoutLoras=String(text||'').replace(
+    /<lora:([^:>]+)(?::([+-]?(?:\d+(?:\.\d*)?|\.\d+)))?>/gi,
+    (_,rawName,rawStrength)=>{
+      const strength=rawStrength==null||rawStrength===''?.9:Number(rawStrength);
+      loras.push({name:matchKnownLora(rawName.trim()),strengthModel:Number.isFinite(strength)?strength:.9});
+      return '';
+    }
+  );
+  const tags=withoutLoras.split(',').map(x=>x.trim()).filter(Boolean);
+  const triggerCandidates=new Set([
+    normalizedTag(characterId),
+    ...loras.map(x=>normalizedTag(loraStem(x.name)))
+  ].filter(Boolean));
+  const triggerIndex=tags.findIndex(tag=>triggerCandidates.has(normalizedTag(tag)));
+  const trigger=triggerIndex>=0?tags[triggerIndex]:'';
+  const globalTags=new Set(
+    String($('positivePrefix')?.value||'').split(',').map(normalizedTag).filter(Boolean)
+  );
+  const baseTags=tags.filter((tag,index)=>index!==triggerIndex&&!globalTags.has(normalizedTag(tag)));
+  return {loras,trigger,basePrompt:baseTags.join(', '),allTags:tags};
+}
 function profileTemplate(id,p={}){
   const box=document.createElement('div');box.className='profile config-profile';box.dataset.id=id;
   box.innerHTML=`
     <div class="profile-title"><strong>캐릭터</strong><input class="pid" value=""><button class="danger remove">연결 삭제</button></div>
-    <div class="hint">예: elena, mara, pippa. 게임의 talentName 앞부분과 일치해야 합니다.</div>
-    <div class="loras"></div>
+    <div class="hint">Wayward 캐릭터 ID입니다. 예: elena, mara, pippa. 게임 talentName과 연결하는 값이며 LoRA 파일명과 같을 필요는 없습니다.</div>
+
+    <details class="promptAssistant" style="margin-top:10px">
+      <summary>간편 입력 도우미 — LoRA 제작자가 제공한 추천 프롬프트 붙여넣기</summary>
+      <div class="hint" style="margin-top:8px">&lt;lora:파일명:강도&gt; 문법은 LoRA 선택/강도로 분리하고, 파일명과 같은 trigger tag가 있으면 Trigger Prompt로 분리합니다. 전역 Positive prefix와 중복되는 품질 태그는 기본 캐릭터 Prompt에서 제외합니다. 자동 판단하지 못한 태그는 삭제하지 않습니다.</div>
+      <textarea class="recommendedPrompt" placeholder="<lora:character_name:0.9>, character_name, 1girl, hair color, eye color, ..."></textarea>
+      <div class="inline" style="margin-top:8px"><button class="parseRecommended">추천 프롬프트 분석해서 적용</button></div>
+      <div class="assistantStatus status" style="margin-top:8px">선택 사항입니다. 직접 아래 항목을 입력해도 됩니다.</div>
+    </details>
+
+    <div class="loras" style="margin-top:10px"></div>
     <button class="addLora">+ LoRA 추가</button>
-    <div class="row"><label>Trigger Prompt</label><input class="trigger"></div>
-    <div class="row"><label>기본 캐릭터 Prompt</label><textarea class="base"></textarea></div>
-    <div class="row"><label>게임 기본 Prompt 제거</label><textarea class="strip"></textarea></div>
+    <div class="hint">LoRA 목록은 ComfyUI가 인식한 파일에서 자동으로 가져옵니다. 실제 Windows 경로를 입력하지 않습니다.</div>
+
+    <div class="row"><label>Trigger Prompt</label><div><input class="trigger"><div class="hint">LoRA 제작자가 지정한 활성화 token/tag만 넣습니다. 예: queen_shua</div></div></div>
+    <div class="row"><label>기본 캐릭터 Prompt</label><div><textarea class="base"></textarea><div class="hint">모든 장면에서 변하지 않는 외형/정체성만 넣습니다. 머리·눈·체형·고유 장식 등. 포즈·표정·복장·배경·행동은 Wayward 장면 프롬프트에 맡깁니다.</div></div></div>
+    <div class="row"><label>게임 기본 Prompt 제거</label><div><textarea class="strip"></textarea><div class="inline"><button class="analyseGamePrompt">실제 게임 Prompt에서 자동 분석</button><button class="applyGamePrompt" hidden>추천값 적용</button></div><div class="gamePromptStatus hint" style="margin-top:6px">기존 Wayward 캐릭터 identity가 새 LoRA와 충돌할 때만 제거합니다. 정확한 앞부분(prefix)만 제거하며 중간 태그는 삭제하지 않습니다.</div></div></div>
     <details><summary>고급 캐릭터 프롬프트</summary>
       <div class="row"><label>Positive prefix</label><textarea class="ppre"></textarea></div>
       <div class="row"><label>Positive suffix</label><textarea class="psuf"></textarea></div>
@@ -215,6 +260,7 @@ function profileTemplate(id,p={}){
   box.querySelector('.npre').value=p.negativePromptPrefix||'';
   box.querySelector('.nsuf').value=p.negativePromptSuffix||'';
   box.querySelector('.remove').onclick=()=>box.remove();
+
   const addLora=(spec={name:'',strengthModel:.9})=>{
     const row=document.createElement('div');row.className='lora-row';
     const sel=document.createElement('select');sel.className='lname';fillSelect(sel,options.loras,spec.name||'');
@@ -224,6 +270,64 @@ function profileTemplate(id,p={}){
   };
   (p.loras||[]).forEach(addLora); if(!(p.loras||[]).length)addLora();
   box.querySelector('.addLora').onclick=()=>addLora();
+
+  box.querySelector('.parseRecommended').onclick=()=>{
+    const source=box.querySelector('.recommendedPrompt').value.trim();
+    const status=box.querySelector('.assistantStatus');
+    if(!source){status.textContent='추천 프롬프트를 먼저 붙여넣으세요.';status.className='assistantStatus status err';return;}
+    const parsed=parseRecommendedLoraPrompt(source,escId(box.querySelector('.pid').value));
+    if(parsed.loras.length){
+      box.querySelector('.loras').innerHTML='';
+      parsed.loras.forEach(addLora);
+    }
+    if(parsed.trigger)box.querySelector('.trigger').value=parsed.trigger;
+    if(parsed.basePrompt)box.querySelector('.base').value=parsed.basePrompt;
+    const parts=[];
+    parts.push(parsed.loras.length?`LoRA ${parsed.loras.length}개 추출`:'LoRA 문법 없음');
+    parts.push(parsed.trigger?`Trigger 후보 "${parsed.trigger}" 분리`:'Trigger는 자동 판별하지 못함 — 직접 확인 필요');
+    parts.push('나머지 태그는 기본 캐릭터 Prompt에 보존');
+    status.textContent=parts.join(' · ');
+    status.className='assistantStatus status '+(parsed.trigger?'ok':'');
+  };
+
+  box.querySelector('.analyseGamePrompt').onclick=async()=>{
+    const characterId=escId(box.querySelector('.pid').value);
+    const status=box.querySelector('.gamePromptStatus');
+    const apply=box.querySelector('.applyGamePrompt');
+    apply.hidden=true;
+    box.dataset.suggestedStrip='';
+    if(!characterId){status.textContent='캐릭터 ID를 먼저 입력하세요.';status.className='gamePromptStatus hint err';return;}
+    status.textContent='최근 실제 게임 프롬프트를 분석 중…';
+    try{
+      const b=await api('/api/setup/prompt-analysis?characterId='+encodeURIComponent(characterId));
+      if(b.sampleCount<2){
+        status.textContent=b.sampleCount===1
+          ? '서로 다른 장면 프롬프트가 1개뿐입니다. 다른 장면 이미지를 하나 이상 더 생성한 뒤 다시 분석하세요. 최근 Prompt: '+b.latestPrompt
+          : '아직 이 캐릭터의 생성 기록이 없습니다. 게임에서 서로 다른 장면 이미지를 2개 이상 생성한 뒤 다시 분석하세요.';
+        status.className='gamePromptStatus hint';
+        return;
+      }
+      if(!b.candidatePrefix){
+        status.textContent=`최근 서로 다른 Prompt ${b.sampleCount}개에서 공통 앞부분을 찾지 못했습니다. 제거값을 비워두는 것이 안전합니다.`;
+        status.className='gamePromptStatus hint';
+        return;
+      }
+      box.dataset.suggestedStrip=b.candidatePrefix;
+      status.textContent=`최근 서로 다른 Prompt ${b.sampleCount}개 비교 · 공통 앞부분 ${b.commonTagCount}개 태그를 찾았습니다:\n${b.candidatePrefix}`;
+      status.className='gamePromptStatus status ok';
+      apply.hidden=false;
+    }catch(e){
+      status.textContent='게임 Prompt 분석 실패: '+e.message;
+      status.className='gamePromptStatus hint err';
+    }
+  };
+  box.querySelector('.applyGamePrompt').onclick=()=>{
+    const suggested=box.dataset.suggestedStrip||'';
+    if(!suggested)return;
+    box.querySelector('.strip').value=suggested;
+    box.querySelector('.gamePromptStatus').textContent='추천 공통 prefix를 적용했습니다. 저장 전 내용을 확인하세요.';
+    box.querySelector('.applyGamePrompt').hidden=true;
+  };
   return box;
 }
 function globalLoraRow(spec={name:'',strengthModel:.5}){
