@@ -21,34 +21,78 @@ if ($listener) {
   throw "Port 8189 is already in use by PID $($listener.OwningProcess). Stop the current Wayward image backend before installing/updating."
 }
 
-function Get-RuntimeSnapshot([string]$BackendRoot) {
-  $configPath = Join-Path $BackendRoot 'wayward-imagegen.config.json'
-  $imagesRoot = Join-Path $BackendRoot 'images'
-  $configHash = $null
-  if (Test-Path $configPath) {
-    $configHash = (Get-FileHash $configPath -Algorithm SHA256).Hash
+function Resolve-RuntimePath([string]$BackendRoot, [string]$Configured, [string]$Fallback) {
+  $raw = if ([string]::IsNullOrWhiteSpace($Configured)) { $Fallback } else { $Configured }
+  if ([System.IO.Path]::IsPathRooted($raw)) {
+    return [System.IO.Path]::GetFullPath($raw)
   }
+  return [System.IO.Path]::GetFullPath((Join-Path $BackendRoot $raw))
+}
 
+function Get-TreeStats([string]$Root) {
   $files = @()
-  if (Test-Path $imagesRoot) {
-    $files = @(Get-ChildItem $imagesRoot -File -Recurse -ErrorAction SilentlyContinue)
+  if (Test-Path $Root) {
+    $files = @(Get-ChildItem $Root -File -Recurse -ErrorAction SilentlyContinue)
   }
   [long]$bytes = 0
   foreach ($file in $files) { $bytes += [long]$file.Length }
+  return [PSCustomObject]@{ Count = $files.Count; Bytes = $bytes }
+}
+
+function Get-RuntimeInfo([string]$BackendRoot) {
+  $configPath = Join-Path $BackendRoot 'wayward-imagegen.config.json'
+  $config = $null
+  $configHash = $null
+  if (Test-Path $configPath) {
+    $configHash = (Get-FileHash $configPath -Algorithm SHA256).Hash
+    try { $config = Get-Content $configPath -Raw | ConvertFrom-Json } catch { $config = $null }
+  }
+
+  $imagesSetting = if ($config -and $config.PSObject.Properties.Name -contains 'imagesDir') { [string]$config.imagesDir } else { 'images' }
+  $imagesRoot = Resolve-RuntimePath $BackendRoot $imagesSetting 'images'
+
+  $stateSetting = if ($config -and $config.PSObject.Properties.Name -contains 'stateDir') { [string]$config.stateDir } else { '' }
+  $stateRoot = if ([string]::IsNullOrWhiteSpace($stateSetting)) {
+    Join-Path $imagesRoot '.state'
+  }
+  else {
+    Resolve-RuntimePath $BackendRoot $stateSetting (Join-Path $imagesSetting '.state')
+  }
 
   return [PSCustomObject]@{
+    ConfigPath = $configPath
     ConfigHash = $configHash
-    ImageCount = $files.Count
-    ImageBytes = $bytes
+    ImagesRoot = [System.IO.Path]::GetFullPath($imagesRoot)
+    StateRoot = [System.IO.Path]::GetFullPath($stateRoot)
+    ImageStats = Get-TreeStats $imagesRoot
+    StateStats = Get-TreeStats $stateRoot
   }
+}
+
+function Get-PreservedTopLevelNames([string]$BackendRoot, $RuntimeInfo) {
+  $root = [System.IO.Path]::GetFullPath($BackendRoot).TrimEnd('\') + '\'
+  $names = @('wayward-imagegen.config.json')
+
+  foreach ($candidate in @($RuntimeInfo.ImagesRoot, $RuntimeInfo.StateRoot)) {
+    $full = [System.IO.Path]::GetFullPath($candidate)
+    if (-not $full.StartsWith($root, [System.StringComparison]::OrdinalIgnoreCase)) { continue }
+    $relative = $full.Substring($root.Length)
+    if ([string]::IsNullOrWhiteSpace($relative)) { continue }
+    $top = $relative.Split([char]'\')[0]
+    if ($top -and $names -notcontains $top) { $names += $top }
+  }
+  return $names
 }
 
 function Assert-RuntimePreserved($Before, $After) {
   if ($Before.ConfigHash -ne $After.ConfigHash) {
     throw 'Safe Portable update changed wayward-imagegen.config.json.'
   }
-  if ($Before.ImageCount -ne $After.ImageCount -or $Before.ImageBytes -ne $After.ImageBytes) {
-    throw "Safe Portable update changed generated images: $($Before.ImageCount)/$($Before.ImageBytes) -> $($After.ImageCount)/$($After.ImageBytes)"
+  if ($Before.ImageStats.Count -ne $After.ImageStats.Count -or $Before.ImageStats.Bytes -ne $After.ImageStats.Bytes) {
+    throw "Safe Portable update changed generated images: $($Before.ImageStats.Count)/$($Before.ImageStats.Bytes) -> $($After.ImageStats.Count)/$($After.ImageStats.Bytes)"
+  }
+  if ($Before.StateStats.Count -ne $After.StateStats.Count -or $Before.StateStats.Bytes -ne $After.StateStats.Bytes) {
+    throw "Safe Portable update changed runtime state: $($Before.StateStats.Count)/$($Before.StateStats.Bytes) -> $($After.StateStats.Count)/$($After.StateStats.Bytes)"
   }
 }
 
@@ -81,12 +125,13 @@ if (-not $existing) {
   Copy-Item $sourceBackend $targetBackend -Recurse -Force
 }
 else {
-  Write-Host '== Safe Portable update: preserve config/images, replace runtime ==' -ForegroundColor Cyan
-  $before = Get-RuntimeSnapshot $targetBackend
+  Write-Host '== Safe Portable update: preserve config/runtime data, replace runtime code ==' -ForegroundColor Cyan
+  $before = Get-RuntimeInfo $targetBackend
+  $preserveNames = Get-PreservedTopLevelNames $targetBackend $before
 
   New-Item -ItemType Directory -Path $targetBackend -Force | Out-Null
   foreach ($entry in @(Get-ChildItem $targetBackend -Force -ErrorAction SilentlyContinue)) {
-    if ($entry.Name -in @('images', 'wayward-imagegen.config.json')) { continue }
+    if ($preserveNames -contains $entry.Name) { continue }
     Remove-Item $entry.FullName -Recurse -Force
   }
 
@@ -94,9 +139,11 @@ else {
     Copy-Item $entry.FullName (Join-Path $targetBackend $entry.Name) -Recurse -Force
   }
 
-  $after = Get-RuntimeSnapshot $targetBackend
+  $after = Get-RuntimeInfo $targetBackend
   Assert-RuntimePreserved $before $after
-  Write-Host ("Preserved runtime data: {0} generated files / {1:N2} MB" -f $after.ImageCount, ($after.ImageBytes / 1MB))
+  Write-Host ("Preserved generated images: {0} files / {1:N2} MB" -f $after.ImageStats.Count, ($after.ImageStats.Bytes / 1MB))
+  Write-Host ("Preserved runtime state   : {0} files / {1:N2} MB" -f $after.StateStats.Count, ($after.StateStats.Bytes / 1MB))
+  Write-Host "Preserved configured paths: images=$($after.ImagesRoot) state=$($after.StateRoot)"
 }
 
 Copy-Item (Join-Path $stage.FullName 'Wayward-Anima.ps1') $targetPs1 -Force
@@ -117,7 +164,7 @@ if (-not $existing -and -not $FreshPlugin) {
 Write-Host ''
 if ($existing -and -not $FreshPlugin) {
   Write-Host 'Portable update is ready.' -ForegroundColor Green
-  Write-Host 'Existing config and generated images were preserved.'
+  Write-Host 'Existing config, configured image library and state were preserved.'
 }
 else {
   Write-Host 'Portable first-run install is ready.' -ForegroundColor Green
