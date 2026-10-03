@@ -123,6 +123,16 @@ textarea{min-height:80px;resize:vertical}.inline{display:flex;gap:8px;align-item
       <img id="testRenderImage" alt="Anima test render" hidden style="display:block;max-width:100%;max-height:520px;margin:10px auto 0;border:1px solid var(--line);border-radius:8px">
     </div>
     <div class="card">
+      <h2>설정 백업</h2>
+      <div class="hint">설정을 저장할 때마다 이전 JSON 설정이 자동 백업됩니다. 전체 설정 복원은 backend 재시작 후 적용됩니다.</div>
+      <div class="inline" style="margin-top:10px">
+        <select id="configBackup"></select>
+        <button id="refreshBackups">새로고침</button>
+        <button id="restoreBackup">선택 백업 복원</button>
+      </div>
+      <div id="backupStatus" class="status" style="margin-top:10px">백업 목록을 불러오지 않았습니다.</div>
+    </div>
+    <div class="card">
       <h2>작업 제어</h2>
       <div id="batchStatus" class="status">불러오는 중…</div>
       <div class="inline" style="margin-top:10px">
@@ -161,7 +171,7 @@ function setPage(n){
   document.querySelectorAll('.stepbtn').forEach(x=>x.classList.toggle('active',Number(x.dataset.step)===page));
   $('prev').disabled=page===1;$('next').hidden=page===4;$('save').hidden=page!==4;
   if(page===2)loadWayward();
-  if(page===4){buildSummary();loadBatch();}
+  if(page===4){buildSummary();loadBatch();loadBackups();}
 }
 document.querySelectorAll('.stepbtn').forEach(b=>b.onclick=()=>setPage(Number(b.dataset.step)));
 $('prev').onclick=()=>setPage(page-1);$('next').onclick=()=>setPage(page+1);
@@ -474,6 +484,50 @@ async function probe(){
 }
 $('probe').onclick=probe;
 
+async function loadBackups(){
+  try{
+    const b=await api('/api/setup/backups');
+    const select=$('configBackup');
+    select.innerHTML='';
+    for(const item of (b.backups||[])){
+      const o=document.createElement('option');
+      o.value=item.name;
+      const when=new Date(item.modifiedAt).toLocaleString();
+      o.textContent=`${when} · ${(item.bytes/1024).toFixed(1)} KB · ${item.name}`;
+      select.append(o);
+    }
+    $('backupStatus').textContent=(b.backups||[]).length
+      ? `자동 백업 ${b.backups.length}개 · 최신 항목이 위에 표시됩니다.`
+      : '아직 자동 백업이 없습니다. 설정을 한 번 저장하면 생성됩니다.';
+    $('backupStatus').className='status';
+    $('restoreBackup').disabled=!(b.backups||[]).length;
+  }catch(e){
+    $('backupStatus').textContent='백업 목록 확인 실패: '+e.message;
+    $('backupStatus').className='status err';
+  }
+}
+$('refreshBackups').onclick=loadBackups;
+$('restoreBackup').onclick=async()=>{
+  const name=$('configBackup').value;
+  if(!name)return;
+  if(!confirm(`이 백업으로 전체 설정을 복원할까요?\n${name}\n\n현재 설정도 복원 전에 다시 백업됩니다.`))return;
+  try{
+    const b=await api('/api/setup/backups/restore',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({name})
+    });
+    $('backupStatus').textContent='복원 완료 · backend 재시작 필요';
+    $('backupStatus').className='status ok';
+    $('topStatus').textContent='백업 복원 완료 · backend 재시작 필요';
+    alert('백업 설정을 복원했습니다.\n현재 설정도 별도 백업했습니다.\nAI 서버를 종료한 뒤 Wayward-Anima.cmd로 다시 실행하면 복원 설정이 적용됩니다.');
+    loadBackups();
+  }catch(e){
+    $('backupStatus').textContent='백업 복원 실패: '+e.message;
+    $('backupStatus').className='status err';
+  }
+};
+
 async function loadBatch(){
   try{
     const b=await api('/api/batch/status');
@@ -512,6 +566,7 @@ $('save').onclick=async()=>{
       $('topStatus').textContent='저장 및 즉시 적용 완료';
       alert('설정을 저장했고 현재 backend에 즉시 적용했습니다.\n기존 설정은 자동 백업되었습니다.');
     }
+    loadBackups();
   }catch(e){$('topStatus').textContent='저장 실패';alert('저장 실패: '+e.message)}
   finally{$('save').disabled=false}
 };
