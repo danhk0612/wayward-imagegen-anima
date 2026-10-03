@@ -41,9 +41,10 @@ textarea{min-height:80px;resize:vertical}.inline{display:flex;gap:8px;align-item
   <section data-page="1">
     <div class="card">
       <h2>ComfyUI 연결</h2>
-      <div class="hint">ComfyUI를 먼저 실행한 뒤 연결을 확인하세요. 설치된 Anima 모델·텍스트 인코더·VAE·LoRA 목록을 자동으로 읽습니다.</div>
-      <div class="row"><label for="comfyUrl">ComfyUI 주소</label><div class="inline"><input id="comfyUrl" value="http://127.0.0.1:8188"><button id="probe">연결 확인</button></div></div>
+      <div class="hint">ComfyUI의 실제 모델 폴더 경로를 입력할 필요는 없습니다. 연결된 ComfyUI가 인식하는 Anima 모델·텍스트 인코더·VAE·LoRA 목록을 API로 자동 조회합니다. 다른 PC나 사용자 지정 포트도 주소를 직접 입력하면 사용할 수 있습니다.</div>
+      <div class="row"><label for="comfyUrl">ComfyUI 주소</label><div class="inline"><input id="comfyUrl" value="http://127.0.0.1:8188"><button id="discoverComfy">로컬 자동 찾기</button><button id="probe">연결 확인</button></div></div>
       <div id="probeStatus" class="status">아직 확인하지 않았습니다.</div>
+      <div id="discoverStatus" class="hint" style="margin-top:8px">자동 찾기는 이 PC의 일반적인 ComfyUI 포트만 확인합니다. 원격/특수 포트는 주소를 직접 입력하세요.</div>
       <div class="row"><label for="animaModel">Anima diffusion model</label><select id="animaModel"></select></div>
       <div class="row"><label for="textEncoder">Text encoder</label><select id="textEncoder"></select></div>
       <div class="row"><label for="vae">VAE</label><select id="vae"></select></div>
